@@ -17,6 +17,8 @@ class Run:
     reason: str = ""
     state: dict = field(default_factory=empty_state)
     state_revision: int = 0
+    local: dict = field(default_factory=dict)
+    character_locked: bool = False
 
 
 class Tracker:
@@ -28,6 +30,8 @@ class Tracker:
         self.last_scene = "unknown"
         if path.exists():
             self.runs = [Run(**r) for r in json.loads(path.read_text('utf-8'))]
+            for run in self.runs:
+                run.state = empty_state() | run.state
             self.pending = self.active is not None
 
     @property
@@ -101,13 +105,13 @@ class Tracker:
                 self.last_scene = scene
                 return '正在养成中：请选“记录为新局”或“继续当前局”确认归属'
             run = self.active
-            changed_character = bool(character and run.character and character != run.character)
+            changed_character = bool(not run.character_locked and character and run.character and character != run.character)
             rollback = turn is not None and run.last_turn is not None and turn < run.last_turn
             if changed_character or rollback:
                 self.pending = True
             if self.pending:
                 return '疑似新局或恢复会话，请确认局次；暂停建议以免混用记录'
-            if character:
+            if character and not run.character_locked:
                 run.character = character
             if turn is not None:
                 run.last_turn = turn

@@ -1,5 +1,7 @@
 """Local-only portable panel; runs with the official Windows NuGet runtime."""
 import argparse
+import base64
+from io import BytesIO
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -14,6 +16,8 @@ from . import __version__
 from .capture import CaptureError, windows
 from .session import ROOT, Session, ActionError
 from .run_state import StateError
+from .local_coach import LocalError
+from .schedule import profile_options
 
 
 class Server(ThreadingHTTPServer):
@@ -79,6 +83,8 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, dict(service='umacoach', version=__version__, instance_id=self.server.instance_id))
         elif self.path == '/api/state':
             self.reply(200, self.server.session.snapshot())
+        elif self.path == '/api/local_catalog':
+            self.reply(200, profile_options())
         elif self.path == '/api/windows':
             try:
                 self.reply(200, [{'hwnd': h, 'title': title} for h, title in windows()])
@@ -111,6 +117,25 @@ class Handler(BaseHTTPRequestHandler):
                 session.set_provider(data['provider'])
             elif action == 'read':
                 session.read_now()
+            elif action == 'read_model':
+                session.read_now(force_model=True)
+            elif action == 'local_settings':
+                with session.lock:
+                    session.local_coach.configure(data['values'])
+            elif action == 'local_manual':
+                with session.lock:
+                    run=session.tracker.active
+                    if 'goals' in data['values'] and (not run or data.get('expected_goals')!=run.local.get('goals',[])):
+                        raise LocalError('目标记录已变化，请刷新确认后再保存，避免覆盖新识别的目标')
+                    session.local_coach.manual(data['run_id'],data['values'])
+            elif action == 'local_calibration_preview':
+                with session.lock:
+                    if session.hwnd is None and session.region is None:raise LocalError('请先选择游戏窗口或框选区域')
+                    session.toggle(False)
+                    pic=session.read_frame().convert('RGB');pic.thumbnail((1000,1300))
+                    buf=BytesIO();pic.save(buf,format='JPEG',quality=90)
+                    self.reply(200,dict(image=base64.b64encode(buf.getvalue()).decode()))
+                    return
             elif action == 'codex_login':
                 session.login_codex()
             elif action == 'codex_check':
@@ -138,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 raise ValueError('未知操作')
             self.reply(200, {'ok': True})
-        except (CaptureError, StateError, ActionError) as error:
+        except (CaptureError, StateError, ActionError, LocalError) as error:
             self.reply(400, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             self.reply(400, {'error': '操作未完成，请检查窗口选择、配置或图片；如果正在分析，请稍候。'})
@@ -171,7 +196,7 @@ def main():
     session = Session(Path(os.environ.get('UMACOACH_DATA_DIR', ROOT/'local-data')))
     stop = threading.Event()
     def sample_loop():
-        while not stop.wait(1):
+        while not stop.wait(.5):
             session.tick()
     threading.Thread(target=sample_loop, daemon=True).start()
     with Server(('127.0.0.1', 0), session) as server:
@@ -192,6 +217,7 @@ def main():
         finally:
             stop.set()
             session.toggle(False)
+            session.local_coach.ocr.close()
             server.shutdown()
             thread.join(2)
 

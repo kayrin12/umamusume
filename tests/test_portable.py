@@ -248,6 +248,25 @@ class HTTP(unittest.TestCase):
         self.assertEqual(self.server.session.snapshot()['run_state']['mentor'],'未定')
         self.assertIsNone(self.server.session.snapshot()['run_state']['outings_used'])
 
+    def test_local_catalog_and_fixed_character_http_roundtrip(self):
+        with self.request('/api/local_catalog') as r:
+            profiles=json.load(r)
+        target=next(p for p in profiles if p['name']=='貴婦人')
+        self.server.session.boundary('new')
+        identifier=self.server.session.tracker.active.id
+        with self.request('/api/action',dict(action='local_manual',run_id=identifier,values=dict(profile_id=target['id']))):pass
+        self.assertEqual(self.server.session.snapshot()['character'],'貴婦人')
+        self.assertTrue(self.server.session.snapshot()['local']['character_locked'])
+
+    def test_local_goal_bulk_edit_rejects_stale_expected_data(self):
+        self.server.session.boundary('new')
+        identifier=self.server.session.tracker.active.id
+        goal=dict(name='报名门槛',deadline=33,required_fans=6000,done=False)
+        payload=dict(action='local_manual',run_id=identifier,expected_goals=[],values=dict(goals=[goal]))
+        with self.request('/api/action',payload):pass
+        with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/action',payload)
+        self.assertIn('目标记录已变化',json.load(caught.exception)['error'])
+
     def test_unsupported_request_returns_json_instead_of_html(self):
         req = urllib.request.Request(self.server.origin+'/', method='PUT')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

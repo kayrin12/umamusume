@@ -21,6 +21,7 @@ from .capture import (CaptureError, Gate, capture, capture_region, desktop_snaps
 from .tracker import Tracker
 from .vision import analyze
 from .run_state import StateError, context_state, merge_state
+from .local_coach import LocalCoach
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,11 +60,13 @@ class Session:
         self.history = []
         self.result = None
         self.status = '选择游戏窗口，点击“应用配置”，然后开始读取。未配置 API 也能本地预览。'
+        self.local_coach = LocalCoach(self)
 
     def snapshot(self):
         with self.lock:
             run = self.tracker.active
             return dict(status=self.status, auto=self.auto, busy=self.busy,
+                        local=self.local_coach.snapshot(),
                         provider=self.provider, analysis_ready=self.analysis_ready(),
                         codex_ready=self.codex_ready, codex_busy=self.codex_busy, codex_state=self.codex_state,
                         has_key=bool(self.key), endpoint=self.endpoint, model=self.model,
@@ -86,6 +89,7 @@ class Session:
             updated, changed = merge_state(run.state, values, manual=True, turn=run.last_turn)
             if changed:
                 run.state, run.state_revision = updated, run.state_revision+1
+                run.local['training'] = {}
                 self.tracker.save()
                 self.epoch += 1
                 self.auto = False
@@ -129,6 +133,9 @@ class Session:
             self.gate = Gate()
             self.frame, self.preview, self.sample = None, '', False
             self.history, self.result = [], None
+            self.local_coach.stable.previous = {}
+            self.local_coach.live_scene = 'unknown'
+            self.local_coach.live_date = None
             self.status = '配置已应用。'+('ChatGPT 账号模式，请完成官方登录并检查状态。' if provider == 'codex' and not self.codex_ready else '可以开始读取画面。')
 
     def analysis_ready(self):
@@ -283,15 +290,21 @@ class Session:
 
     def boundary(self, kind):
         with self.lock:
+            self.auto = False
             self.epoch += 1
             self.gate = Gate()
             self.history, self.result = [], None
+            self.local_coach.stable.previous = {}
+            self.local_coach.live_scene = 'unknown'
+            self.local_coach.live_date = None
             if kind == 'new':
                 self.tracker.new()
             elif kind == 'resume':
                 if self.tracker.active:
                     self.tracker.active.last_turn = None
-                    self.tracker.active.character = ''
+                    if not self.tracker.active.character_locked:
+                        self.tracker.active.character = ''
+                    self.tracker.active.local['training'] = {}
                 self.tracker.resume()
                 self.tracker.save()
             elif kind == 'abandon':
@@ -327,9 +340,9 @@ class Session:
             if self.analysis_ready():
                 self.submit(frame, True)
 
-    def read_now(self):
+    def read_now(self, force_model=False):
         with self.lock:
-            if self.busy:
+            if self.busy and (force_model or not self.local_coach.settings['enabled'] or self.sample):
                 raise ActionError('上一张画面仍在分析，请稍候')
             if self.sample and self.frame is not None:
                 frame = self.frame.copy()
@@ -345,6 +358,10 @@ class Session:
                     self.result = None
                     raise
                 self.set_frame(frame)
+            if self.local_coach.settings['enabled'] and not force_model and not self.sample:
+                self.local_coach.submit(frame,force=True)
+                self.status = '正在本地读取；无需等待模型。事件或心得可点“模型分析当前画面”。'
+                return
             if not self.analysis_ready():
                 self.result = None
                 self.status = '画面预览正常。'+('请点“使用 ChatGPT 登录”，完成后检查登录状态，即可获取建议。' if self.provider == 'codex' else '请填写视觉 API 密钥以获取建议。')
@@ -362,6 +379,8 @@ class Session:
             if enabled:
                 self.sample = False
             self.status = ('正在读取可见游戏窗口并等待分析。' if self.analysis_ready() else '正在本地预览；请完成 ChatGPT 登录或配置 API 后再分析。') if enabled else ('已暂停读取；正在进行的分析可能仍消耗额度。' if self.busy else '已暂停读取。')
+            if enabled and self.local_coach.settings['enabled']:
+                self.status = '正在本地持续读取；切换训练预览即可自动缓存，无需逐项点读取。模型用于事件、心得与局次边界确认。'
 
     def tick(self):
         with self.lock:
@@ -370,6 +389,9 @@ class Session:
             try:
                 frame = self.read_frame()
                 self.set_frame(frame)
+                if self.local_coach.settings['enabled']:
+                    self.local_coach.submit(frame)
+                    return
                 ready = self.gate.ready(frame, time.monotonic())
                 interval = 30 if self.provider == 'codex' else 8
                 if ready and not self.busy and self.analysis_ready() and time.monotonic()-self.requested_at >= interval:
@@ -398,6 +420,9 @@ class Session:
                                         pending_boundary=self.tracker.pending,
                                         run_state=context_state(run.state) if run and not self.tracker.pending else None,
                                         recent_observations=self.history[-4:])
+        if not sample:
+            context['fixed_character'] = run.character if run and run.character_locked else None
+            context['local_observations'] = self.local_coach.snapshot()
         context = deepcopy(context)
         self.result = None
         self.status = '正在分析截图样本…' if sample else '正在分析当前游戏画面…'
@@ -415,6 +440,12 @@ class Session:
                         self.status = '分析期间画面已明显变化，过时结果已丢弃。'
                         return
                     self.gate.mark(frame, time.monotonic())
+                    active = self.tracker.active
+                    if (active and active.local.get('date',{}).get('source') == 'local_ocr_twice'
+                            and result.get('turn_index') is not None and active.last_turn is not None
+                            and result['turn_index'] < active.last_turn and not self.tracker.pending):
+                        self.status = '模型结果来自更早回合，已丢弃；继续使用当前本地记录。'
+                        return
                     prior = self.tracker.active.id if self.tracker.active else None
                     self.status = '截图样本模式，不修改真实局次。' if sample else self.tracker.apply(result)
                     current = self.tracker.active.id if self.tracker.active else None

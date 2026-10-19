@@ -9,7 +9,7 @@
 .card{background:#19251d;border:1px solid #2f4435;border-radius:16px;padding:20px;margin:14px 0}.settings{display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:12px}label{display:block;font-size:13px;color:#c1d1c6;margin-bottom:7px}input,select,button{font:inherit;border-radius:9px;padding:10px 12px;border:1px solid #465e4d;background:#111c15;color:#eaf3ed}input,select{width:100%}button{cursor:pointer;white-space:nowrap}button:hover{background:#2d4735}button.primary{background:#a5eb81;border-color:#a5eb81;color:#16240d;font-weight:700}button.danger{color:#ffb7af}button:disabled{opacity:.5;cursor:wait}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}.row select{flex:1;min-width:200px}.layout{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px}.screen{display:flex;justify-content:center;align-items:center;min-height:360px;background:#0c120e;border-radius:10px;overflow:hidden}.screen img{max-width:100%;max-height:640px}.hint{font-size:13px;color:#a6b7ab;line-height:1.7}.status{padding:14px 18px;background:#263d2b;border-radius:10px;line-height:1.6}.run{color:#c1e7b5;font-size:14px;margin:14px 0}.advice{font-size:23px;color:#c4f29e;line-height:1.5;white-space:pre-wrap}.reason{white-space:pre-wrap;line-height:1.8}li{color:#c0d1c5;line-height:1.8}h2{font-size:17px}h3{font-size:14px;margin-top:24px}.error{color:#ffb7af;min-height:22px}footer{font-size:12px;color:#9eb1a4;margin:25px 0}#upload{display:none}@media(max-width:850px){.settings,.layout{grid-template-columns:1fr}body{padding:15px}}
 dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:14px;max-width:95vw;max-height:94vh;padding:18px}dialog::backdrop{background:#000b}#crop{display:block;max-width:90vw;max-height:65vh;cursor:crosshair;touch-action:none}#diagnostics{white-space:pre-wrap;font-size:12px}#target{color:#c1e7b5}.capture-actions{border-top:1px solid #2f4435;padding-top:14px}
 </style>
-<header><span class="badge">繁中服 · 本机只读辅助 · v0.4.1 窗口选择修复</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
+<header><span class="badge">繁中服 · 本机只读辅助 · v0.5 本地快速建议</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
 <section id="connection-warning" class="card" hidden role="alert"><h2>尚未连接本机助手</h2><p id="connection-help"></p><p class="hint">请完整解压下载包，双击 start.bat，并使用它自动打开的页面。若未自动打开，复制启动窗口显示的“本机面板地址”到浏览器。不要直接打开 panel.html 或下载预览页。</p></section>
 <section class="card">
  <label for="provider">分析方式</label><select id="provider"><option value="codex">使用 ChatGPT 账号（官方 Codex 登录）</option><option value="api">使用视觉 API 密钥</option></select>
@@ -32,16 +32,39 @@ dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:1
 <div class="run" id="run">等待养成开始</div>
 <div class="row"><button data-boundary="new">记录为新局</button><button data-boundary="resume">继续当前局</button><button data-boundary="abandon">本局已放弃</button></div>
 <section class="card"><h2>本局状态</h2><p id="state-summary">确认局次后开始记录。</p><button id="state-edit">查看 / 修正本局状态</button><p class="hint">保留最近确认值，未知不会记成0。体力、干劲与指南条可能来自旧回合，请以当前画面为准。打开修正会暂停读取。</p></section>
+<section class="card" id="local-panel"><h2>本地快速建议 · 不等模型</h2>
+ <div class="row"><label><input id="local-enabled" type="checkbox" style="width:auto">启用Windows本地OCR</label><label>训练失败率上限 <input id="local-risk" type="number" min="0" max="50" value="15" style="width:80px">%</label><button id="local-save-settings">保存本地设置</button><button id="local-calibrate">校准OCR区域</button><button id="model-read">模型分析当前画面</button></div>
+ <p id="local-status" class="hint"></p><p id="local-date" class="run"></p><div id="local-advice" class="advice"></div><div id="local-ranking"></div>
+ <p class="hint">开启持续读取后，每项训练只需在游戏中切换预览并停留到识别完成，不必逐项点读取。仅比较本回合已见收益；看不清就提示校准或快速录入。分数是经验规则排序，不是评价分或最优保证。</p>
+ <details><summary>固定本局角色与日期 / 粉丝快速修正</summary>
+  <div class="row"><select id="local-character" aria-label="本局角色"><option value="">自填角色 / 选择角色版本</option></select><input id="local-character-name" placeholder="自填繁中角色名" aria-label="自填角色名称" style="max-width:220px"><button id="local-fix-character">固定本局角色</button></div>
+  <div class="row"><label>学年<select id="local-year"><option value="">请选择</option><option value="1">初級</option><option value="2">古典</option><option value="3">資深</option></select></label><label>月<input id="local-month" type="number" min="1" max="12" style="width:90px"></label><label>前后半<select id="local-half"><option value="0">前半</option><option value="1">後半</option></select></label><label>距目标剩余<input id="local-remaining" type="number" min="0" max="99" style="width:90px"></label><button id="local-save-date">保存日期</button></div>
+  <div class="row"><label>确认当前为本局第几回合<input id="local-turn" type="number" min="1" max="99" style="width:100px"></label><button id="local-anchor">标定回合</button><label>当前粉丝<input id="local-fans" type="number" min="0" style="width:140px"></label><button id="local-save-fans">保存粉丝</button></div>
+ </details>
+ <details><summary>当前训练快速录入（OCR不完整时使用）</summary><p class="hint">每个收益都要确认；无收益填0，未知留空则不参与排序。友情与人数不清楚时留空，不虚构加分。</p>
+  <div class="row"><select id="quick-kind" aria-label="训练项目"><option>速度</option><option>耐力</option><option>力量</option><option>毅力</option><option>智力</option></select></div>
+  <div class="settings" id="quick-gains"></div><div class="row"><label>失败率%<input id="quick-failure" type="number" min="0" max="100"></label><label>友情人数<input id="quick-friends" type="number" min="0" max="6"></label><label>在场支援<input id="quick-people" type="number" min="0" max="6"></label><label>未满羁绊<input id="quick-bond" type="number" min="0" max="6"></label><label>指南颜色<select id="quick-color"><option value="">未知</option><option value="blue">蓝</option><option value="green">绿</option><option value="pink">粉</option></select></label><button id="quick-save">记录当前训练</button></div>
+ </details>
+ <h3>目标与粉丝提醒</h3><div id="local-alerts"></div><div id="local-goals"></div>
+ <details><summary>登记客户端已确认的目标门槛</summary><p class="hint">参照游戏目标页或报名条件填写。原生角色赛程仅作未核验参考，不能当传奇杯强制目标；粉丝门槛未知时不会提示安全。</p>
+  <div class="row"><input id="goal-name" placeholder="比赛或粉丝目标名称" aria-label="目标名称"><label>学年<select id="goal-year"><option value="1">初級</option><option value="2">古典</option><option value="3">資深</option></select></label><label>月<input id="goal-month" type="number" min="1" max="12" style="width:80px"></label><label>前后半<select id="goal-half"><option value="0">前半</option><option value="1">後半</option></select></label><label>所需粉丝<input id="goal-fans" type="number" min="0" style="width:140px"></label><button id="goal-add">登记目标</button></div>
+ </details><details><summary>参考角色赛程与可查看的额外赛事</summary><div id="local-reference" class="hint"></div><div id="local-races" class="hint"></div><p id="local-schedule-notice" class="hint"></p></details>
+ <p id="local-error" class="error" role="alert"></p>
+</section>
+<dialog id="ocr-dialog"><h2>校准本地OCR选区</h2><p class="hint">在当前游戏截图上拖框。日期区域应含学年、月份、前后半与剩余回合；训练收益区域应含六列标题及全部+收益，避免包含重复的属性标题。当前训练名称框只圈选中项目标题，不要含五个切换按钮。粉丝区域只圈当前粉丝，目标区域只圈所需粉丝。</p>
+<select id="ocr-field"><option value="header">日期 / 体力文字区域</option><option value="preview">完整六列训练收益与失败率</option><option value="selected">当前选中训练名称</option><option value="fans">当前粉丝数</option><option value="goal">目标 / 报名所需粉丝</option><option value="stats">当前五维属性（标题与数值）</option></select>
+<canvas id="ocr-canvas" style="display:block;max-width:85vw;max-height:60vh;touch-action:none;cursor:crosshair"></canvas><div class="row"><button id="ocr-set">保存此选区</button><button id="ocr-clear">停用此选区</button><button id="ocr-close">关闭</button></div><label><input id="ocr-complete" type="checkbox" style="width:auto">我确认收益区域完整包含六列，没显示+号的列表示本次收益0</label><p id="ocr-error" class="error"></p></dialog>
+
 <main class="layout">
- <section class="card"><h2>游戏画面</h2><div class="screen"><img id="preview" alt="尚未捕获游戏画面" hidden></div><p class="hint">每秒本地采样。画面变化后才分析，ChatGPT 模式自动分析至少间隔30秒，API模式至少8秒；实际延迟取决于模型。不会录制视频。Codex模式临时截图在分析结束后清理。</p></section>
- <section class="card"><h2>当前回合建议</h2><div class="advice" id="advice">选择窗口后即可先预览画面。</div><p class="reason" id="reason"></p><div id="details"></div><p class="hint">J01、J02、W01均为跨服推定、仅供参考，保留作者经验及争议。不能保证每回合最优或达到 UB。未看到所有训练预览时，不会虚构其他选项的收益。疑似重开时需确认局次，再恢复建议。</p></section>
+ <section class="card"><h2>游戏画面</h2><div class="screen"><img id="preview" alt="尚未捕获游戏画面" hidden></div><p class="hint">每0.5秒本地采样，本地OCR与模型并行。仅模型分析受限频影响，ChatGPT 模式自动分析至少间隔30秒，API模式至少8秒；实际延迟取决于模型。不会录制视频。Codex模式临时截图在分析结束后清理。</p></section>
+ <section class="card"><h2>模型分析 · 事件 / 心得</h2><div class="advice" id="advice">选择窗口后即可先预览画面。</div><p class="reason" id="reason"></p><div id="details"></div><p class="hint">J01、J02、W01均为跨服推定、仅供参考，保留作者经验及争议。不能保证每回合最优或达到 UB。未看到所有训练预览时，不会虚构其他选项的收益。疑似重开时需确认局次，再恢复建议。</p></section>
 </main>
 <footer>API密钥仅保留在内存；ChatGPT登录由官方Codex管理，本程序不读取登录令牌。关闭浏览器标签页不会退出后台，请点击“退出助手”或关闭命令窗口。局次和识别文字存于local-data，强制退出后可清理残留临时截图。</footer>
 <dialog id="region-dialog"><h2>框选游戏画面</h2><p class="hint">在下图拖动框出游戏画面。此桌面截图仅在本机显示，不会用于 AI 分析。确认后仅读取所选区域。</p><canvas id="crop"></canvas><div class="row"><button class="primary" id="confirm-region" disabled>确认游戏区域</button><button id="cancel-region">取消</button><span id="crop-status" class="hint">请拖动选择</span></div><p id="crop-error" class="error"></p></dialog>
 <dialog id="state-dialog" style="width:1000px"><h2>查看 / 修正本局状态</h2><p class="hint" id="state-run"></p><p class="hint">空白表示未知；0表示确认为0。只修改你确认的内容。心得最多10个，移除旧心得后保存会留下替换记录。比赛日期请包含学年；这里只记录已出赛结果。</p>
 <form id="state-form">
  <div class="settings">
-  <div><label for="s-mentor">导师</label><select id="s-mentor"><option>未定</option><option>聖烈特</option><option>速度象徵</option><option>俳成功</option></select></div>
+  <div><label for="s-fans">当前粉丝</label><input id="s-fans" type="number" min="0" max="99999999"></div><div><label for="s-stat-speed">当前速度</label><input id="s-stat-speed" type="number" min="0" max="2500"></div><div><label for="s-stat-stamina">当前耐力</label><input id="s-stat-stamina" type="number" min="0" max="2500"></div><div><label for="s-stat-power">当前力量</label><input id="s-stat-power" type="number" min="0" max="2500"></div><div><label for="s-stat-guts">当前毅力</label><input id="s-stat-guts" type="number" min="0" max="2500"></div><div><label for="s-stat-wisdom">当前智力</label><input id="s-stat-wisdom" type="number" min="0" max="2500"></div><div><label for="s-mentor">导师</label><select id="s-mentor"><option>未定</option><option>聖烈特</option><option>速度象徵</option><option>俳成功</option></select></div>
   <div><label for="s-mood">干劲</label><select id="s-mood"><option value="">未知</option><option>超絕好調</option><option>絕好調</option><option>好調</option><option>普通</option><option>不調</option><option>絕不調</option></select></div>
   <div><label for="s-outings">团队卡外出已用（0–5）</label><input id="s-outings" type="number" min="0" max="5"></div>
   <div><label for="s-energy">体力</label><input id="s-energy" type="number" min="0" max="200"></div>
@@ -69,8 +92,10 @@ const correctPage=location.protocol==='http:'&&location.hostname==='127.0.0.1'&&
 function controls(){
  for(const id of ['refresh','configure','auto','read','import','upload','exit','pick','region','diagnose','endpoint','model','key','window','provider','codex-login','codex-check'])$(id).disabled=!connected;
  for(const b of document.querySelectorAll('[data-boundary]'))b.disabled=!connected;
- $('read').disabled=!connected||!!state.busy;$('pick').disabled=!connected||!!state.picking;
+ $('read').disabled=!connected||(!!state.busy&&!state.local?.settings.enabled);$('pick').disabled=!connected||!!state.picking;
  $('codex-login').disabled=!connected||!!state.codex_busy;$('codex-check').disabled=!connected||!!state.codex_busy;
+ $('model-read').disabled=!connected||!!state.busy;
+ $('local-fix-character').disabled=!connected||!state.run_id||state.pending||state.sample;
  $('state-edit').disabled=!connected||!state.run_id||state.pending||state.sample;
  $('state-save').disabled=!connected||!state.run_id||state.pending||state.sample;
  if(!connected)$('confirm-region').disabled=true;
@@ -113,7 +138,7 @@ async function poll(){
   const target=JSON.stringify([state.hwnd,state.region]);if(target!==lastTarget){lastTarget=target;syncTarget();}
   showTarget();
   $('run').textContent=(state.pending?'需要确认局次 · ':'')+(state.run_id?'本局 '+state.run_id+' · '+(state.character||'角色待识别'):'无进行中的局次')+(state.sample?' · 截图样本模式':'');
-  renderRunState();
+  renderRunState();renderLocal();
   if(first){$('provider').value=state.provider||'codex';showProvider();$('endpoint').value=state.endpoint;$('model').value=state.model;if(state.has_key)$('key').placeholder='已从环境加载密钥；留空保留';first=false;}
   const loginLabels={unchecked:'尚未检查登录',preparing:'准备中…',installing:'首次安装中…',ready:'已使用 ChatGPT 登录',login_required:'请完成官方登录后检查',not_installed:'尚未安装官方组件',unavailable:'组件或登录未就绪'};
   $('codex-status').textContent=loginLabels[state.codex_state]||'等待检查';
@@ -195,23 +220,56 @@ function readRows(kind){return Array.from($('s-'+kind).children).map(row=>{
 });}
 function readStateForm(){
  const n=id=>$(id).value===''?null:Number($(id).value);
- return {mentor:$('s-mentor').value,mood:$('s-mood').value||null,outings_used:n('s-outings'),energy:{current:n('s-energy'),maximum:n('s-maximum')},turns_to_insight:n('s-turns'),guide_gauges:{blue:n('s-blue'),green:n('s-green'),pink:n('s-pink')},race_totals:{starts:n('s-starts'),wins:n('s-wins')},insights:readRows('insights'),friend_levels:readRows('friends'),races:readRows('races'),dream_fest:readRows('fests')};
+ return {fans:n('s-fans'),attributes:Object.fromEntries(['speed','stamina','power','guts','wisdom'].map(k=>[k,n('s-stat-'+k)])),mentor:$('s-mentor').value,mood:$('s-mood').value||null,outings_used:n('s-outings'),energy:{current:n('s-energy'),maximum:n('s-maximum')},turns_to_insight:n('s-turns'),guide_gauges:{blue:n('s-blue'),green:n('s-green'),pink:n('s-pink')},race_totals:{starts:n('s-starts'),wins:n('s-wins')},insights:readRows('insights'),friend_levels:readRows('friends'),races:readRows('races'),dream_fest:readRows('fests')};
 }
 $('state-edit').onclick=async()=>{
  if(!await action({action:'auto',enabled:false}))return;
  const s=state.run_state;if(!s||state.pending||state.sample)return;
  editRun=state.run_id;editRevision=state.state_revision;$('state-run').textContent='本局 '+editRun+'；已暂停自动读取。保存后请重新分析或恢复读取。';$('state-error').textContent='';
  const fill=(id,v)=>$(id).value=v??'';
- fill('s-mentor',s.mentor);fill('s-mood',s.mood);fill('s-outings',s.outings_used);fill('s-energy',s.energy.current);fill('s-maximum',s.energy.maximum);fill('s-turns',s.turns_to_insight);for(const c of ['blue','green','pink'])fill('s-'+c,s.guide_gauges[c]);fill('s-starts',s.race_totals.starts);fill('s-wins',s.race_totals.wins);
+ fill('s-fans',s.fans);for(const k of ['speed','stamina','power','guts','wisdom'])fill('s-stat-'+k,s.attributes[k]);fill('s-mentor',s.mentor);fill('s-mood',s.mood);fill('s-outings',s.outings_used);fill('s-energy',s.energy.current);fill('s-maximum',s.energy.maximum);fill('s-turns',s.turns_to_insight);for(const c of ['blue','green','pink'])fill('s-'+c,s.guide_gauges[c]);fill('s-starts',s.race_totals.starts);fill('s-wins',s.race_totals.wins);
  for(const [kind,field] of [['insights','insights'],['friends','friend_levels'],['races','races'],['fests','dream_fest']]){$('s-'+kind).replaceChildren();for(const item of s[field]||[])stateRow(kind,item);}
  $('s-replacements').replaceChildren();for(const r of s.replacements){const p=document.createElement('p');p.textContent=(r.date_text||r.updated_at)+' · '+(r.source==='manual'?'手动修正':'画面识别')+'：'+r.removed.map(i=>i.name).join('、')+' → '+(r.added.map(i=>i.name).join('、')||'移除');$('s-replacements').append(p);}if(!s.replacements.length)$('s-replacements').textContent='暂无';
- const labels={mentor:'导师',insights:'心得',insight_replacements:'心得替换',guide_gauges:'指南条',blue:'蓝',green:'绿',pink:'粉',turns_to_insight:'距离选心得',outings_used:'外出次数',friend_levels:'亲友等级',energy:'体力',current:'当前',maximum:'上限',mood:'干劲',races:'比赛',race_totals:'累计比赛',starts:'出赛',wins:'胜场',dream_fest:'Dream Fest'};
- $('s-evidence').replaceChildren();for(const [key,e] of Object.entries(s.evidence)){const p=document.createElement('p');p.textContent=key.split('.').map(k=>labels[k]||k).join(' / ')+'：'+(e.date_text||'日期未知')+' · '+(e.source==='manual'?'手动确认':'识别置信度 '+Math.round(e.confidence*100)+'%')+' · '+e.updated_at+' · '+e.evidence;$('s-evidence').append(p);}
+ const labels={fans:'粉丝',attributes:'五维',mentor:'导师',insights:'心得',insight_replacements:'心得替换',guide_gauges:'指南条',blue:'蓝',green:'绿',pink:'粉',turns_to_insight:'距离选心得',outings_used:'外出次数',friend_levels:'亲友等级',energy:'体力',current:'当前',maximum:'上限',mood:'干劲',races:'比赛',race_totals:'累计比赛',starts:'出赛',wins:'胜场',dream_fest:'Dream Fest'};
+ $('s-evidence').replaceChildren();for(const [key,e] of Object.entries(s.evidence)){const p=document.createElement('p');p.textContent=key.split('.').map(k=>labels[k]||k).join(' / ')+'：'+(e.date_text||'日期未知')+' · '+(e.source==='manual'?'手动确认':e.source==='local_ocr_twice'?'连续两次本地OCR一致':'识别置信度 '+Math.round(e.confidence*100)+'%')+' · '+e.updated_at+' · '+e.evidence;$('s-evidence').append(p);}
  editBaseline=readStateForm();$('state-dialog').showModal();
 };
 for(const [id,kind] of [['add-insight','insights'],['add-friend','friends'],['add-race','races'],['add-fest','fests']])$(id).onclick=()=>{if(kind==='insights'&&$('s-insights').children.length>=10){$('state-error').textContent='心得最多10个，请先移除被替换的旧心得。';return;}stateRow(kind);};
 $('state-form').onsubmit=async e=>{e.preventDefault();$('state-error').textContent='';const values=readStateForm(),patch={};for(const key of Object.keys(values))if(JSON.stringify(values[key])!==JSON.stringify(editBaseline[key]))patch[key]=values[key];try{await api('/api/action',{action:'state_correct',run_id:editRun,revision:editRevision,values:patch});$('state-dialog').close();await poll();}catch(error){$('state-error').textContent=error.message;}};
 $('state-cancel').onclick=()=>$('state-dialog').close();
+let localInit=false,localRun=null,localScheduleRendered='',quickDate=null,ocrImage=null,ocrRect=null,ocrStart=null;
+const nval=id=>$(id).value===''?null:Number($(id).value);
+function dateIndex(year,month,half){const y=nval(year),m=nval(month);if(!y||!m||m<1||m>12)throw new Error('请填写完整学年、月份和前后半');return (y-1)*24+(m-1)*2+Number($(half).value);}
+function localDateKey(d){return d?.calendar_index??d?.token??null;}
+function localDateName(index){return ['初級','古典','資深'][Math.floor(index/24)]+'年'+(Math.floor(index%24/2)+1)+'月'+(index%2?'後半':'前半');}
+async function localManual(values){$('local-error').textContent='';try{if(!state.run_id||state.pending||state.sample)throw new Error('请先确认当前局次');await api('/api/action',{action:'local_manual',run_id:state.run_id,expected_goals:state.local.goals,values});await poll();return true;}catch(e){$('local-error').textContent=e.message;return false;}}
+function renderLocal(){
+ const l=state.local;if(!l)return;
+ if(!localInit){$('local-enabled').checked=l.settings.enabled;$('local-risk').value=l.settings.risk_limit;localInit=true;api('/api/local_catalog').then(list=>{for(const p of list)$('local-character').add(new Option(p.name+' / '+p.name_jp+' · '+p.variant,p.id));$('local-character').value=state.local.profile_id||'';}).catch(e=>$('local-error').textContent=e.message);}
+ if(localRun!==state.run_id){localRun=state.run_id;$('local-character').value=l.profile_id||'';$('local-character-name').value=state.character||'';const d=l.date;if(d.calendar_index!==undefined&&d.calendar_index!==null){$('local-year').value=Math.floor(d.calendar_index/24)+1;$('local-month').value=Math.floor(d.calendar_index%24/2)+1;$('local-half').value=d.calendar_index%2;}else{$('local-year').value='';$('local-month').value='';}$('local-fans').value=l.fans??'';$('local-remaining').value=d.remaining??'';}
+ $('local-status').textContent=(l.busy?'本地识别中 · ':'')+l.message+(l.elapsed_ms!==null?' · 最近OCR '+l.elapsed_ms+' ms':'');
+ $('local-date').textContent=(state.character||'请固定本局角色')+(l.character_locked?'（已固定）':'')+' · '+(l.date.date_text||'日期待识别')+' · '+(l.date.remaining!==undefined&&l.date.remaining!==null?'距目标剩 '+l.date.remaining+' 回合':'剩余回合未知')+' · '+(l.turn_number!==null?'本局第 '+l.turn_number+' 回合（已标定）':'本局回合未标定，不能将日历序号冒充实际回合')+' · 粉丝 '+(l.fans??'未知');
+ $('local-advice').textContent=l.training?l.training.recommendation:state.pending?'请先确认局次，再恢复本地建议。':'日期或训练未确认，暂不使用旧回合建议。';
+ $('local-ranking').replaceChildren();if(l.training){const ul=document.createElement('ul');for(const row of l.training.rows){const li=document.createElement('li');li.textContent=row.kind+'：'+row.score+' · 失败率'+row.failure+'% · 五维/Pt收益 '+row.gains.join('/')+' · '+row.explanation+(row.missing.length?'；未计入：'+row.missing.join('、'):'');ul.append(li);}const p=document.createElement('p');p.className='hint';p.textContent=l.training.scope+'。'+l.training.rules;$('local-ranking').append(ul,p);}
+ const sig=JSON.stringify([l.schedule,l.goals,state.run_id]);if(sig!==localScheduleRendered){localScheduleRendered=sig;for(const id of ['local-alerts','local-goals','local-reference','local-races'])$(id).replaceChildren();if(l.schedule){for(const msg of l.schedule.messages){const p=document.createElement('p');p.textContent=msg;if(l.schedule.urgent)p.style.color='#ffb7af';$('local-alerts').append(p);}for(const g of l.schedule.reference_goals){const p=document.createElement('p');p.textContent='未核验原生目标：'+localDateName(g.calendar_index)+' '+g.name+' '+g.condition+'；粉丝门槛未知';$('local-reference').append(p);}for(const race of l.schedule.candidates){const p=document.createElement('p');p.textContent='可查看：'+localDateName(race.calendar_index)+' '+race.name+' '+race.grade+' '+race.distance+'m；报名条件与粉丝收益待客户端确认';$('local-races').append(p);}$('local-schedule-notice').textContent=l.schedule.notice+' 来源：'+l.schedule.source.url;}
+ for(const [index,g] of l.goals.entries()){const p=document.createElement('p');p.textContent=(g.done?'已确认完成 ':'待确认 ')+localDateName(g.deadline)+' '+g.name+' · 需粉丝 '+g.required_fans+' ';for(const [label,remove] of [[g.done?'取消完成':'标为完成',false],['删除',true]]){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{const goals=state.local.goals.map(x=>({name:x.name,deadline:x.deadline,required_fans:x.required_fans,done:x.done}));if(remove)goals.splice(index,1);else goals[index].done=!goals[index].done;localManual({goals});};p.append(b);}$('local-goals').append(p);}}
+}
+for(const [i,label] of ['速度收益','耐力收益','力量收益','毅力收益','智力收益','技能Pt收益'].entries()){const wrapper=document.createElement('div'),lab=document.createElement('label'),input=document.createElement('input');input.id='gain-'+i;input.type='number';input.min=0;input.max=300;input.setAttribute('aria-label',label);lab.htmlFor=input.id;lab.textContent=label;wrapper.append(lab,input);$('quick-gains').append(wrapper);input.onfocus=()=>{if(quickDate===null)quickDate=localDateKey(state.local.date);};}
+$('local-save-settings').onclick=()=>action({action:'local_settings',values:{enabled:$('local-enabled').checked,risk_limit:Number($('local-risk').value)}});
+$('local-fix-character').onclick=()=>localManual($('local-character').value?{profile_id:$('local-character').value}:{character:$('local-character-name').value});
+$('local-save-date').onclick=()=>{try{localManual({calendar_index:dateIndex('local-year','local-month','local-half'),remaining:nval('local-remaining')});}catch(e){$('local-error').textContent=e.message;}};
+$('local-save-fans').onclick=()=>localManual({fans:nval('local-fans')});$('local-anchor').onclick=()=>localManual({turn_number:nval('local-turn')});
+$('quick-save').onclick=async()=>{const key=localDateKey(state.local.date);if(quickDate!==null&&quickDate!==key){$('local-error').textContent='录入期间日期已变化，请核对新回合收益后重新填写';quickDate=null;return;}if(await localManual({preview_date:key,preview:{kind:$('quick-kind').value,gains:Array.from({length:6},(_,i)=>nval('gain-'+i)),failure:nval('quick-failure'),friends:nval('quick-friends'),participants:nval('quick-people'),unbonded:nval('quick-bond'),color:$('quick-color').value||null}}))quickDate=null;};
+$('goal-add').onclick=()=>{try{const goals=state.local.goals.map(g=>({name:g.name,deadline:g.deadline,required_fans:g.required_fans,done:g.done}));goals.push({name:$('goal-name').value,deadline:dateIndex('goal-year','goal-month','goal-half'),required_fans:nval('goal-fans'),done:false});localManual({goals});}catch(e){$('local-error').textContent=e.message;}};
+$('model-read').onclick=async()=>{if(await ensureTarget(true))await action({action:'read_model'});};
+const ocrCanvas=$('ocr-canvas'),ocrCtx=ocrCanvas.getContext('2d');
+function ocrPoint(e){const b=ocrCanvas.getBoundingClientRect();return [Math.max(0,Math.min(ocrCanvas.width,(e.clientX-b.left)*ocrCanvas.width/b.width)),Math.max(0,Math.min(ocrCanvas.height,(e.clientY-b.top)*ocrCanvas.height/b.height))];}
+function drawOcr(){if(!ocrImage)return;ocrCtx.drawImage(ocrImage,0,0);if(ocrRect){ocrCtx.strokeStyle='#b6ff7f';ocrCtx.lineWidth=3;ocrCtx.strokeRect(...ocrRect);}}
+$('local-calibrate').onclick=async()=>{try{if(!await ensureTarget(false))return;const data=await api('/api/action',{action:'local_calibration_preview'});ocrImage=new Image();ocrImage.onload=()=>{ocrCanvas.width=ocrImage.naturalWidth;ocrCanvas.height=ocrImage.naturalHeight;ocrRect=null;drawOcr();$('ocr-complete').checked=state.local.settings.preview_complete;$('ocr-error').textContent='';$('ocr-dialog').showModal();};ocrImage.src='data:image/jpeg;base64,'+data.image;}catch(e){$('local-error').textContent=e.message;}};
+ocrCanvas.onpointerdown=e=>{ocrStart=ocrPoint(e);ocrRect=null;ocrCanvas.setPointerCapture(e.pointerId);};ocrCanvas.onpointermove=e=>{if(!ocrStart)return;const end=ocrPoint(e);ocrRect=[Math.min(ocrStart[0],end[0]),Math.min(ocrStart[1],end[1]),Math.abs(end[0]-ocrStart[0]),Math.abs(end[1]-ocrStart[1])];drawOcr();};ocrCanvas.onpointerup=()=>ocrStart=null;
+async function saveOcr(clear){try{if(!clear&&(!ocrRect||ocrRect[2]<8||ocrRect[3]<8))throw new Error('请先拖框选择区域');const rect=clear?null:[ocrRect[0]/ocrCanvas.width,ocrRect[1]/ocrCanvas.height,(ocrRect[0]+ocrRect[2])/ocrCanvas.width,(ocrRect[1]+ocrRect[3])/ocrCanvas.height];await api('/api/action',{action:'local_settings',values:{regions:{[$('ocr-field').value]:rect},preview_complete:$('ocr-complete').checked}});$('ocr-error').textContent='已保存。关闭后开启持续读取。';await poll();}catch(e){$('ocr-error').textContent=e.message;}}
+$('ocr-set').onclick=()=>saveOcr(false);$('ocr-clear').onclick=()=>saveOcr(true);$('ocr-close').onclick=()=>{$('ocr-dialog').close();ocrImage=null;ocrRect=null;};
+
 controls();poll().then(()=>{if(connected)refresh();});if(correctPage)setInterval(poll,1000);
 </script>
 </html>

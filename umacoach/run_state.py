@@ -36,6 +36,8 @@ RACE = obj(dict(name=string(), date_text=string(), place=nullable(integer(1, 18)
 FEST = obj(dict(stage={'type': 'string', 'enum': ['Stella', 'Pride', 'Legend']},
                 date_text=string(), place=nullable(integer(1, 18))))
 VALUES = dict(
+    fans=integer(0, 99_999_999),
+    attributes=obj({key:nullable(integer(0,2500)) for key in ('speed','stamina','power','guts','wisdom')}),
     mentor={'type': 'string', 'enum': MENTORS},
     insights=dict(type='array', items=INSIGHT, maxItems=10),
     insight_replacements=dict(type='array', maxItems=10,
@@ -108,7 +110,7 @@ def validate_update(update):
 
 
 def empty_state():
-    return dict(mentor='未定', insights=None, guide_gauges={c: None for c in COLORS},
+    return dict(fans=None, attributes={k:None for k in ('speed','stamina','power','guts','wisdom')}, mentor='未定', insights=None, guide_gauges={c: None for c in COLORS},
         turns_to_insight=None, outings_used=None, friend_levels=None,
         energy=dict(current=None, maximum=None), mood=None, races=None,
         race_totals=dict(starts=None, wins=None), dream_fest=None,
@@ -182,7 +184,7 @@ def merge_state(state, update, *, manual=False, turn=None, date_text=''):
                     continue  # same screen analyzed again
                 items[index] = new
                 result['insights'] = items
-        elif not manual and key in ('guide_gauges', 'energy', 'race_totals'):
+        elif not manual and key in ('guide_gauges', 'energy', 'race_totals','attributes'):
             result[key].update({k: v for k, v in value.items() if v is not None})
         elif not manual and key in ('insights', 'friend_levels', 'races', 'dream_fest'):
             identity = (lambda x: (x['date_text'], x['name'])) if key == 'races' else (
@@ -196,7 +198,7 @@ def merge_state(state, update, *, manual=False, turn=None, date_text=''):
             confidence=1.0 if manual else envelope['confidence'],
             evidence='用户手动修正' if manual else envelope['evidence'],
             turn_index=turn, date_text=date_text, updated_at=stamp)
-        if key in ('guide_gauges', 'energy', 'race_totals') and value is not None:
+        if key in ('guide_gauges', 'energy', 'race_totals','attributes') and value is not None:
             for component, observed in value.items():
                 if manual or observed is not None:
                     result['evidence'][key+'.'+component] = metadata
