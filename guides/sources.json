@@ -1,0 +1,45 @@
+[
+  {
+    "id": "B01",
+    "url": "https://www.bilibili.com/opus/1114366824438300712",
+    "title": "繁中服第二期CLASSIC大赛攻略",
+    "author": "这里是冬木鸭；文案六老师",
+    "published_date": "2025-09-19",
+    "checked_date": "2026-10-18",
+    "status": "read_historical",
+    "server": "tw",
+    "scenario": "uaf",
+    "goal": "competition",
+    "event": "第二期CLASSIC；东京2400米；春；逆时针；阴天；重场",
+    "rules": [],
+    "note": "已获取正文；文章提及UAF版本，部分配卡与数值仅见于图片。不能证明是当前赛事，也不是传奇杯冲分规则。"
+  },
+  {
+    "id": "J01",
+    "url": "https://miturunn-pocketbook.com/【ウマ娘】uaランク育成方法【伝説レジェンズシナ/",
+    "title": "用户标注：剧本高分攻略（标题待核验）",
+    "author": null,
+    "published_date": null,
+    "checked_date": "2026-10-18",
+    "status": "unread",
+    "server": null,
+    "scenario": null,
+    "goal": null,
+    "rules": [],
+    "note": "当前代理CONNECT返回403；尚未获取正文或核验URL有效性、日服版本及繁中服适用性。"
+  },
+  {
+    "id": "J02",
+    "url": "https://note.com/yupon_uma/n/ndc39d8007484",
+    "title": "用户标注：剧本高分攻略（标题待核验）",
+    "author": null,
+    "published_date": null,
+    "checked_date": "2026-10-18",
+    "status": "unread",
+    "server": null,
+    "scenario": null,
+    "goal": null,
+    "rules": [],
+    "note": "当前代理CONNECT返回403；尚未获取正文、确认是否全文公开或核验版本适用性。"
+  }
+]
