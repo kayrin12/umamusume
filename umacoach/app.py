@@ -13,6 +13,7 @@ from PIL import Image, ImageTk
 
 from .capture import Gate, capture, distance, windows
 from .tracker import Tracker
+from .run_state import context_state, StateError
 from .vision import analyze
 
 
@@ -202,6 +203,7 @@ class App(tk.Tk):
         run = self.tracker.active
         context = {} if sample else {
             'run_id': run.id if run else None, 'pending_boundary': self.tracker.pending,
+            'run_state': context_state(run.state) if run and not self.tracker.pending else None,
             'recent_observations': self.history[-4:]}
         self.status.set('正在分析截图样本…' if sample else '正在分析当前游戏画面…')
         self.output.delete('1.0', 'end')
@@ -232,7 +234,13 @@ class App(tk.Tk):
             return
         self.gate.mark(frame, time.monotonic())
         prior = self.tracker.active.id if self.tracker.active else None
-        notice = '截图样本模式，不修改真实局次' if sample else self.tracker.apply(result)
+        try:
+            notice = '截图样本模式，不修改真实局次' if sample else self.tracker.apply(result)
+        except StateError as error:
+            self.auto = False
+            self.auto_button.config(text='开始持续读取')
+            self.status.set('状态更新未采纳：'+str(error)+'；请使用便携版浏览器面板核对本局状态。')
+            return
         current = self.tracker.active.id if self.tracker.active else None
         if not sample:
             if current != prior or self.tracker.pending:

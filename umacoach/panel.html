@@ -9,7 +9,7 @@
 .card{background:#19251d;border:1px solid #2f4435;border-radius:16px;padding:20px;margin:14px 0}.settings{display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:12px}label{display:block;font-size:13px;color:#c1d1c6;margin-bottom:7px}input,select,button{font:inherit;border-radius:9px;padding:10px 12px;border:1px solid #465e4d;background:#111c15;color:#eaf3ed}input,select{width:100%}button{cursor:pointer;white-space:nowrap}button:hover{background:#2d4735}button.primary{background:#a5eb81;border-color:#a5eb81;color:#16240d;font-weight:700}button.danger{color:#ffb7af}button:disabled{opacity:.5;cursor:wait}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}.row select{flex:1;min-width:200px}.layout{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px}.screen{display:flex;justify-content:center;align-items:center;min-height:360px;background:#0c120e;border-radius:10px;overflow:hidden}.screen img{max-width:100%;max-height:640px}.hint{font-size:13px;color:#a6b7ab;line-height:1.7}.status{padding:14px 18px;background:#263d2b;border-radius:10px;line-height:1.6}.run{color:#c1e7b5;font-size:14px;margin:14px 0}.advice{font-size:23px;color:#c4f29e;line-height:1.5;white-space:pre-wrap}.reason{white-space:pre-wrap;line-height:1.8}li{color:#c0d1c5;line-height:1.8}h2{font-size:17px}h3{font-size:14px;margin-top:24px}.error{color:#ffb7af;min-height:22px}footer{font-size:12px;color:#9eb1a4;margin:25px 0}#upload{display:none}@media(max-width:850px){.settings,.layout{grid-template-columns:1fr}body{padding:15px}}
 dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:14px;max-width:95vw;max-height:94vh;padding:18px}dialog::backdrop{background:#000b}#crop{display:block;max-width:90vw;max-height:65vh;cursor:crosshair;touch-action:none}#diagnostics{white-space:pre-wrap;font-size:12px}#target{color:#c1e7b5}.capture-actions{border-top:1px solid #2f4435;padding-top:14px}
 </style>
-<header><span class="badge">繁中服 · 本机只读辅助 · v0.3 ChatGPT 账号模式</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
+<header><span class="badge">繁中服 · 本机只读辅助 · v0.4 整局状态记录</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
 <section id="connection-warning" class="card" hidden role="alert"><h2>尚未连接本机助手</h2><p id="connection-help"></p><p class="hint">请完整解压下载包，双击 start.bat，并使用它自动打开的页面。若未自动打开，复制启动窗口显示的“本机面板地址”到浏览器。不要直接打开 panel.html 或下载预览页。</p></section>
 <section class="card">
  <label for="provider">分析方式</label><select id="provider"><option value="codex">使用 ChatGPT 账号（官方 Codex 登录）</option><option value="api">使用视觉 API 密钥</option></select>
@@ -31,12 +31,36 @@ dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:1
 <div id="status" class="status" role="status">正在连接本机助手…</div>
 <div class="run" id="run">等待养成开始</div>
 <div class="row"><button data-boundary="new">记录为新局</button><button data-boundary="resume">继续当前局</button><button data-boundary="abandon">本局已放弃</button></div>
+<section class="card"><h2>本局状态</h2><p id="state-summary">确认局次后开始记录。</p><button id="state-edit">查看 / 修正本局状态</button><p class="hint">保留最近确认值，未知不会记成0。体力、干劲与指南条可能来自旧回合，请以当前画面为准。打开修正会暂停读取。</p></section>
 <main class="layout">
  <section class="card"><h2>游戏画面</h2><div class="screen"><img id="preview" alt="尚未捕获游戏画面" hidden></div><p class="hint">每秒本地采样。画面变化后才分析，ChatGPT 模式自动分析至少间隔30秒，API模式至少8秒；实际延迟取决于模型。不会录制视频。Codex模式临时截图在分析结束后清理。</p></section>
- <section class="card"><h2>当前回合建议</h2><div class="advice" id="advice">选择窗口后即可先预览画面。</div><p class="reason" id="reason"></p><div id="details"></div><p class="hint">攻略尚在核验，不能保证每回合最优或达到 UB。未看到所有训练预览时，不会虚构其他选项的收益。疑似重开时需确认局次，再恢复建议。</p></section>
+ <section class="card"><h2>当前回合建议</h2><div class="advice" id="advice">选择窗口后即可先预览画面。</div><p class="reason" id="reason"></p><div id="details"></div><p class="hint">J01、J02、W01均为跨服推定、仅供参考，保留作者经验及争议。不能保证每回合最优或达到 UB。未看到所有训练预览时，不会虚构其他选项的收益。疑似重开时需确认局次，再恢复建议。</p></section>
 </main>
 <footer>API密钥仅保留在内存；ChatGPT登录由官方Codex管理，本程序不读取登录令牌。关闭浏览器标签页不会退出后台，请点击“退出助手”或关闭命令窗口。局次和识别文字存于local-data，强制退出后可清理残留临时截图。</footer>
 <dialog id="region-dialog"><h2>框选游戏画面</h2><p class="hint">在下图拖动框出游戏画面。此桌面截图仅在本机显示，不会用于 AI 分析。确认后仅读取所选区域。</p><canvas id="crop"></canvas><div class="row"><button class="primary" id="confirm-region" disabled>确认游戏区域</button><button id="cancel-region">取消</button><span id="crop-status" class="hint">请拖动选择</span></div><p id="crop-error" class="error"></p></dialog>
+<dialog id="state-dialog" style="width:1000px"><h2>查看 / 修正本局状态</h2><p class="hint" id="state-run"></p><p class="hint">空白表示未知；0表示确认为0。只修改你确认的内容。心得最多10个，移除旧心得后保存会留下替换记录。比赛日期请包含学年；这里只记录已出赛结果。</p>
+<form id="state-form">
+ <div class="settings">
+  <div><label for="s-mentor">导师</label><select id="s-mentor"><option>未定</option><option>聖烈特</option><option>速度象徵</option><option>俳成功</option></select></div>
+  <div><label for="s-mood">干劲</label><select id="s-mood"><option value="">未知</option><option>超絕好調</option><option>絕好調</option><option>好調</option><option>普通</option><option>不調</option><option>絕不調</option></select></div>
+  <div><label for="s-outings">团队卡外出已用（0–5）</label><input id="s-outings" type="number" min="0" max="5"></div>
+  <div><label for="s-energy">体力</label><input id="s-energy" type="number" min="0" max="200"></div>
+  <div><label for="s-maximum">体力上限</label><input id="s-maximum" type="number" min="1" max="200"></div>
+  <div><label for="s-turns">距离选心得剩余回合（0–6）</label><input id="s-turns" type="number" min="0" max="6"></div>
+  <div><label for="s-blue">蓝指南条（0–8）</label><input id="s-blue" type="number" min="0" max="8"></div>
+  <div><label for="s-green">绿指南条（0–8）</label><input id="s-green" type="number" min="0" max="8"></div>
+  <div><label for="s-pink">粉指南条（0–8）</label><input id="s-pink" type="number" min="0" max="8"></div>
+  <div><label for="s-starts">整局出赛场次（未知留空）</label><input id="s-starts" type="number" min="0" max="200"></div>
+  <div><label for="s-wins">整局胜场（未知留空）</label><input id="s-wins" type="number" min="0" max="200"></div>
+ </div>
+ <h3>已持有心得（名称 / 颜色 / 星级）</h3><div id="s-insights"></div><button type="button" id="add-insight">添加心得</button>
+ <h3>亲友等级（角色名称 / 等级数字或MAX）</h3><div id="s-friends"></div><button type="button" id="add-friend">添加亲友</button>
+ <h3>已出赛记录（比赛名 / 含学年的日期 / 名次 / 级别）</h3><div id="s-races"></div><button type="button" id="add-race">添加比赛</button>
+ <h3>Dream Fest（阶段 / 含学年的日期 / 名次）</h3><div id="s-fests"></div><button type="button" id="add-fest">添加Dream Fest</button>
+ <h3>心得替换记录</h3><div id="s-replacements" class="hint"></div>
+ <details><summary>各项最近确认时间与证据</summary><div id="s-evidence" class="hint"></div></details>
+ <p id="state-error" class="error" role="alert"></p><div class="row"><button type="submit" class="primary" id="state-save">保存修正</button><button type="button" id="state-cancel">关闭</button></div>
+</form></dialog>
 <script nonce="__TOKEN__">
 'use strict';
 const token='__TOKEN__', expectedOrigin='__LOCAL_ORIGIN__', expectedInstance='__INSTANCE_ID__', $=id=>document.getElementById(id);
@@ -47,6 +71,8 @@ function controls(){
  for(const b of document.querySelectorAll('[data-boundary]'))b.disabled=!connected;
  $('read').disabled=!connected||!!state.busy;$('pick').disabled=!connected||!!state.picking;
  $('codex-login').disabled=!connected||!!state.codex_busy;$('codex-check').disabled=!connected||!!state.codex_busy;
+ $('state-edit').disabled=!connected||!state.run_id||state.pending||state.sample;
+ $('state-save').disabled=!connected||!state.run_id||state.pending||state.sample;
  if(!connected)$('confirm-region').disabled=true;
 }
 function disconnected(message,details){
@@ -86,6 +112,7 @@ async function poll(){
   $('target').textContent=state.target_label?'当前读取目标：'+state.target_label:'尚未选择读取目标';
   const target=JSON.stringify([state.hwnd,state.region]);if(target!==lastTarget){lastTarget=target;syncTarget();}
   $('run').textContent=(state.pending?'需要确认局次 · ':'')+(state.run_id?'本局 '+state.run_id+' · '+(state.character||'角色待识别'):'无进行中的局次')+(state.sample?' · 截图样本模式':'');
+  renderRunState();
   if(first){$('provider').value=state.provider||'codex';showProvider();$('endpoint').value=state.endpoint;$('model').value=state.model;if(state.has_key)$('key').placeholder='已从环境加载密钥；留空保留';first=false;}
   const loginLabels={unchecked:'尚未检查登录',preparing:'准备中…',installing:'首次安装中…',ready:'已使用 ChatGPT 登录',login_required:'请完成官方登录后检查',not_installed:'尚未安装官方组件',unavailable:'组件或登录未就绪'};
   $('codex-status').textContent=loginLabels[state.codex_state]||'等待检查';
@@ -127,6 +154,50 @@ for(const b of document.querySelectorAll('[data-boundary]'))b.onclick=()=>action
 $('import').onclick=()=>$('upload').click();
 $('upload').onchange=async()=>{const file=$('upload').files[0];if(!file)return;if(file.size>8_000_000){$('error').textContent='请选择小于8MB的截图。';return;}const reader=new FileReader();reader.onload=()=>action({action:'import',image:reader.result.split(',')[1]});reader.readAsDataURL(file);$('upload').value='';};
 $('exit').onclick=async()=>{await action({action:'exit'});$('status').textContent='助手已退出，可以关闭本页面。';};
+let editRun=null, editRevision=null, editBaseline=null;
+const known=x=>x===null||x===undefined?'未知':String(x);
+function renderRunState(){
+ const s=state.run_state;
+ $('state-summary').textContent=s?'导师：'+known(s.mentor)+' · 体力：'+known(s.energy.current)+' / '+known(s.energy.maximum)+' · 干劲：'+known(s.mood)+' · 外出已用：'+known(s.outings_used)+' / 5 · 心得已记录：'+(s.insights===null?'未知':s.insights.length)+' / 10 · 指南蓝/绿/粉：'+['blue','green','pink'].map(c=>known(s.guide_gauges[c])).join('/')+' · 距离选心得：'+known(s.turns_to_insight)+'回合':'确认局次后开始记录。';
+}
+function entryInput(label,value,type='text',min,max){
+ const input=document.createElement('input');input.type=type;input.value=value??'';input.placeholder=label;input.setAttribute('aria-label',label);input.style.flex='1';input.style.minWidth='95px';if(min!==undefined)input.min=min;if(max!==undefined)input.max=max;return input;
+}
+function entrySelect(label,value,options){const select=document.createElement('select');select.setAttribute('aria-label',label);for(const [v,t] of options)select.add(new Option(t,v));select.value=value;return select;}
+function stateRow(kind,value={}){
+ const row=document.createElement('div');row.className='row';let inputs=[];
+ if(kind==='insights')inputs=[entryInput('心得名称',value.name),entrySelect('心得颜色',value.color||'pink',[['blue','蓝'],['green','绿'],['pink','粉']]),entryInput('心得星级',value.stars??1,'number',1,3)];
+ if(kind==='friends')inputs=[entryInput('亲友名称',value.name),entryInput('亲友等级',value.level)];
+ if(kind==='races')inputs=[entryInput('比赛名称',value.name),entryInput('比赛日期（含学年）',value.date_text),entryInput('比赛名次',value.place,'number',1,18),entryInput('比赛级别（如G1）',value.grade)];
+ if(kind==='fests')inputs=[entrySelect('Dream Fest阶段',value.stage||'Stella',[['Stella','Stella'],['Pride','Pride'],['Legend','Legend']]),entryInput('Dream Fest日期（含学年）',value.date_text),entryInput('Dream Fest名次',value.place,'number',1,18)];
+ const remove=document.createElement('button');remove.type='button';remove.textContent='移除';remove.onclick=()=>row.remove();row.append(...inputs,remove);row.fields=inputs;$('s-'+kind).append(row);
+}
+function readRows(kind){return Array.from($('s-'+kind).children).map(row=>{
+ const v=row.fields.map(i=>i.value.trim()), n=x=>x===''?null:Number(x);
+ if(kind==='insights')return {name:v[0],color:v[1],stars:n(v[2])};
+ if(kind==='friends')return {name:v[0],level:v[1].toUpperCase()==='MAX'?'MAX':n(v[1])};
+ if(kind==='races')return {name:v[0],date_text:v[1],place:n(v[2]),grade:v[3]||null};
+ return {stage:v[0],date_text:v[1],place:n(v[2])};
+});}
+function readStateForm(){
+ const n=id=>$(id).value===''?null:Number($(id).value);
+ return {mentor:$('s-mentor').value,mood:$('s-mood').value||null,outings_used:n('s-outings'),energy:{current:n('s-energy'),maximum:n('s-maximum')},turns_to_insight:n('s-turns'),guide_gauges:{blue:n('s-blue'),green:n('s-green'),pink:n('s-pink')},race_totals:{starts:n('s-starts'),wins:n('s-wins')},insights:readRows('insights'),friend_levels:readRows('friends'),races:readRows('races'),dream_fest:readRows('fests')};
+}
+$('state-edit').onclick=async()=>{
+ if(!await action({action:'auto',enabled:false}))return;
+ const s=state.run_state;if(!s||state.pending||state.sample)return;
+ editRun=state.run_id;editRevision=state.state_revision;$('state-run').textContent='本局 '+editRun+'；已暂停自动读取。保存后请重新分析或恢复读取。';$('state-error').textContent='';
+ const fill=(id,v)=>$(id).value=v??'';
+ fill('s-mentor',s.mentor);fill('s-mood',s.mood);fill('s-outings',s.outings_used);fill('s-energy',s.energy.current);fill('s-maximum',s.energy.maximum);fill('s-turns',s.turns_to_insight);for(const c of ['blue','green','pink'])fill('s-'+c,s.guide_gauges[c]);fill('s-starts',s.race_totals.starts);fill('s-wins',s.race_totals.wins);
+ for(const [kind,field] of [['insights','insights'],['friends','friend_levels'],['races','races'],['fests','dream_fest']]){$('s-'+kind).replaceChildren();for(const item of s[field]||[])stateRow(kind,item);}
+ $('s-replacements').replaceChildren();for(const r of s.replacements){const p=document.createElement('p');p.textContent=(r.date_text||r.updated_at)+' · '+(r.source==='manual'?'手动修正':'画面识别')+'：'+r.removed.map(i=>i.name).join('、')+' → '+(r.added.map(i=>i.name).join('、')||'移除');$('s-replacements').append(p);}if(!s.replacements.length)$('s-replacements').textContent='暂无';
+ const labels={mentor:'导师',insights:'心得',insight_replacements:'心得替换',guide_gauges:'指南条',blue:'蓝',green:'绿',pink:'粉',turns_to_insight:'距离选心得',outings_used:'外出次数',friend_levels:'亲友等级',energy:'体力',current:'当前',maximum:'上限',mood:'干劲',races:'比赛',race_totals:'累计比赛',starts:'出赛',wins:'胜场',dream_fest:'Dream Fest'};
+ $('s-evidence').replaceChildren();for(const [key,e] of Object.entries(s.evidence)){const p=document.createElement('p');p.textContent=key.split('.').map(k=>labels[k]||k).join(' / ')+'：'+(e.date_text||'日期未知')+' · '+(e.source==='manual'?'手动确认':'识别置信度 '+Math.round(e.confidence*100)+'%')+' · '+e.updated_at+' · '+e.evidence;$('s-evidence').append(p);}
+ editBaseline=readStateForm();$('state-dialog').showModal();
+};
+for(const [id,kind] of [['add-insight','insights'],['add-friend','friends'],['add-race','races'],['add-fest','fests']])$(id).onclick=()=>{if(kind==='insights'&&$('s-insights').children.length>=10){$('state-error').textContent='心得最多10个，请先移除被替换的旧心得。';return;}stateRow(kind);};
+$('state-form').onsubmit=async e=>{e.preventDefault();$('state-error').textContent='';const values=readStateForm(),patch={};for(const key of Object.keys(values))if(JSON.stringify(values[key])!==JSON.stringify(editBaseline[key]))patch[key]=values[key];try{await api('/api/action',{action:'state_correct',run_id:editRun,revision:editRevision,values:patch});$('state-dialog').close();await poll();}catch(error){$('state-error').textContent=error.message;}};
+$('state-cancel').onclick=()=>$('state-dialog').close();
 controls();poll().then(()=>{if(connected)refresh();});if(correctPage)setInterval(poll,1000);
 </script>
 </html>

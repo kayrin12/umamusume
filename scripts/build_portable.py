@@ -18,6 +18,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT/'local-data/portable-build'
 OUTPUT = ROOT.parent/'artifacts/umacoach-windows-portable-x64.zip'
+UPGRADE = ROOT.parent/'artifacts/umacoach-upgrade-v0.3-to-v0.4.0.zip'
 PYTHON = '3.13.16'
 PILLOW = '12.3.0'
 
@@ -140,6 +141,13 @@ def main():
         print('Portable bundle:', OUTPUT)
         print('Size:', OUTPUT.stat().st_size, 'bytes')
         print('SHA256:', hashlib.sha256(OUTPUT.read_bytes()).hexdigest())
+        # Code/data only: keep the user's existing runtime, official CLI and runs.
+        with zipfile.ZipFile(OUTPUT) as full, zipfile.ZipFile(UPGRADE, 'w', zipfile.ZIP_DEFLATED, compresslevel=6) as upgrade:
+            for name in full.namelist():
+                if not name.startswith('umacoach/.runtime/'):
+                    upgrade.writestr(name, full.read(name))
+        print('Upgrade bundle:', UPGRADE)
+        print('Upgrade size:', UPGRADE.stat().st_size, 'bytes')
 
 
 if __name__ == '__main__':

@@ -213,6 +213,30 @@ class HTTP(unittest.TestCase):
             self.assertEqual(data['instance_id'], self.server.instance_id)
             self.assertEqual(data['service'], 'umacoach')
 
+    def test_state_correction_http_roundtrip_and_revision_conflict(self):
+        with self.request('/api/action', {'action': 'new'}):
+            pass
+        state=self.server.session.snapshot()
+        body=dict(action='state_correct',run_id=state['run_id'],revision=state['state_revision'],
+                  values=dict(mentor='俳成功',outings_used=3))
+        with self.request('/api/action',body) as response:
+            self.assertTrue(json.load(response)['ok'])
+        with self.request('/api/state') as response:
+            self.assertEqual(json.load(response)['run_state']['outings_used'],3)
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request('/api/action',body)
+        self.assertIn('状态已更新',json.load(caught.exception)['error'])
+
+    def test_invalid_state_http_patch_is_atomic(self):
+        self.server.session.boundary('new')
+        state=self.server.session.snapshot()
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            self.request('/api/action',dict(action='state_correct',run_id=state['run_id'],
+                revision=0,values=dict(outings_used=6,mentor='俳成功')))
+        self.assertEqual(caught.exception.code,400)
+        self.assertEqual(self.server.session.snapshot()['run_state']['mentor'],'未定')
+        self.assertIsNone(self.server.session.snapshot()['run_state']['outings_used'])
+
     def test_unsupported_request_returns_json_instead_of_html(self):
         req = urllib.request.Request(self.server.origin+'/', method='PUT')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

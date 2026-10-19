@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 
 from .guides import load_guide_pack
+from .run_state import update_schema, validate_update
 
 
 SCENES = {'unknown', 'title', 'run_start', 'training', 'event', 'race', 'skills',
@@ -32,7 +33,25 @@ turn_index仅在日期清楚时填写：(学年-1)*24+(月份-1)*2+前半0/后�
 "reason":"根据可见信息解释取舍","missing":["缺失但影响决策的信息"],
 "alternatives":["已见到的其他选项及取舍"],"guide_refs":["确实使用的已提供攻略ID，无则空"]}
 confidence是画面/边界识别置信度，不是建议一定正确的概率。
+攻略的tw_applicability=assumed表示“跨服推定、仅供参考”，不代表已在繁中服验证。
+使用assumed规则时，在reason明确写来源ID和“跨服推定”，不得称为最优、公认或确定适用。
+【有争议】【作者经验】按原限定理解；争议条件不用于确定赛程，刷开局由用户决定。
+guide_refs只填写来源ID（如J01）；规则编号（如J01-4）写在reason里。
+可以增加可选state_update对象；每个字段为{"value":可见值,"confidence":0到1,"evidence":"当前画面的具体证据"}。
+仅填当前截图确实可见的状态，未知字段省略或null；不能根据攻略、行动建议或旧上下文推算更新。
+字段包括mentor、insights、insight_replacements、guide_gauges、turns_to_insight、outings_used、friend_levels、energy、mood、races、race_totals、dream_fest。
+mentor用未定/聖烈特/速度象徵/俳成功；insights为已持有心得（不是待选候选项）的可见子集，元素{name,color:blue/green/pink,stars:1到3}。
+只有明确已完成替换证据才填insight_replacements:[{old_name,new_insight:{name,color,stars}}]，不要把待选项当持有。
+guide_gauges为{blue,green,pink}各0到8或null；turns_to_insight为剩余0到6回合；outings_used为已用0到5次，不是剩余次数。
+friend_levels为[{name,level:整数或"MAX"}]，每个人分别记录，不把亲友羁绊槽当等级。
+energy为{current,maximum}整数或null，不从模糊体力条估算精确数值；mood为超絕好調/絕好調/好調/普通/不調/絕不調。
+races为[{name,date_text,place:名次或null,grade:级别或null}]；dream_fest为[{stage:Stella/Pride/Legend,date_text,place:名次或null}]。
+日期必须包括学年（如古典年12月后半）；不同学年的同名比赛不可合并；出赛选单不是已参赛记录，预测不是结果。
+race_totals为{starts,wins}，只有画面明确显示整局累计时才填，不能把可见的几场比赛当全部。
+当前run_state是带证据的历史记录，不是当前画面的真值；检查各项evidence日期回合，不把旧体力/指南条当当前值。
+state_update完整JSON结构约束：__STATE_SCHEMA__
 '''
+PROMPT = PROMPT.replace('__STATE_SCHEMA__', json.dumps(update_schema(), ensure_ascii=False))
 
 
 def validate(value):
@@ -50,6 +69,7 @@ def validate(value):
     for field in ('evidence', 'missing', 'alternatives', 'guide_refs'):
         if not isinstance(value.get(field), list) or not all(isinstance(x, str) for x in value[field]):
             raise ValueError(f'无效列表字段 {field}')
+    validate_update(value.get('state_update'))
     return value
 
 

@@ -1,9 +1,10 @@
 """Conservative, persisted run boundaries; no score thresholds are assumed."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 import json
 import uuid
+from .run_state import empty_state, merge_state
 
 
 @dataclass
@@ -14,6 +15,8 @@ class Run:
     last_turn: int | None = None
     status: str = "active"
     reason: str = ""
+    state: dict = field(default_factory=empty_state)
+    state_revision: int = 0
 
 
 class Tracker:
@@ -57,6 +60,22 @@ class Tracker:
         self.pending = False
 
     def apply(self, observation: dict) -> str:
+        prior = self.active
+        status = self._apply_boundary(observation)
+        if observation['confidence'] >= .90 and not self.pending:
+            target = self.active
+            if observation['scene'] in ('result', 'abandon_confirmed'):
+                target = prior
+            if target and observation['scene'] in ('run_start', 'training', 'event', 'race', 'skills', 'result', 'abandon_confirmed'):
+                state, changed = merge_state(target.state, observation.get('state_update'),
+                    turn=observation.get('turn_index'), date_text=observation.get('date_text', ''))
+                if changed:
+                    target.state = state
+                    target.state_revision += 1
+                    self.save()
+        return status
+
+    def _apply_boundary(self, observation: dict) -> str:
         scene = observation['scene']
         confidence = observation['confidence']
         character = observation.get('character') or ''

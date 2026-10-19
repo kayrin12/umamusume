@@ -9,6 +9,7 @@ import time
 import secrets
 import struct
 import sys
+from copy import deepcopy
 
 from PIL import Image
 
@@ -19,6 +20,7 @@ from .capture import (CaptureError, Gate, capture, capture_region, desktop_snaps
                       distance, foreground_window, selection_box, windows)
 from .tracker import Tracker
 from .vision import analyze
+from .run_state import StateError, context_state, merge_state
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -65,8 +67,27 @@ class Session:
                         picking=bool(self.picker), preview=self.preview, result=self.result,
                         pending=self.tracker.pending, sample=self.sample,
                         run_id=run.id if run else None,
+                        run_state=context_state(run.state) if run else None,
+                        state_revision=run.state_revision if run else None,
                         character=run.character if run else '',
                         run_count=len(self.tracker.runs))
+
+    def correct_state(self, run_id, revision, values):
+        with self.lock:
+            run = self.tracker.active
+            if not run or self.tracker.pending or self.sample or run.id != run_id:
+                raise StateError('请先确认当前局次；样本模式不能修改真实局次状态')
+            if type(revision) is not int or revision != run.state_revision:
+                raise StateError('状态已更新，请重新打开状态面板后修正，避免覆盖新记录')
+            updated, changed = merge_state(run.state, values, manual=True, turn=run.last_turn)
+            if changed:
+                run.state, run.state_revision = updated, run.state_revision+1
+                self.tracker.save()
+                self.epoch += 1
+                self.auto = False
+                self.result, self.history = None, []
+                self.gate = Gate()
+                self.status = '本局状态已修正并保存；已暂停自动读取，请重新分析当前画面。'
 
     def configure(self, data):
         with self.lock:
@@ -369,7 +390,9 @@ class Session:
         run = self.tracker.active
         context = {} if sample else dict(run_id=run.id if run else None,
                                         pending_boundary=self.tracker.pending,
+                                        run_state=context_state(run.state) if run and not self.tracker.pending else None,
                                         recent_observations=self.history[-4:])
+        context = deepcopy(context)
         self.result = None
         self.status = '正在分析截图样本…' if sample else '正在分析当前游戏画面…'
 
@@ -403,6 +426,11 @@ class Session:
                         self.result = result
                     elif result['confidence'] < .85:
                         self.status = '画面识别不确定，暂不显示建议；请等画面稳定后重新读取。'
+            except StateError as error:
+                with self.lock:
+                    if epoch == self.epoch:
+                        self.auto, self.result = False, None
+                        self.status = '状态更新未采纳：'+str(error)+'。请查看并修正本局状态后重试。'
             except codex_backend.CodexError as error:
                 with self.lock:
                     if epoch == self.epoch:

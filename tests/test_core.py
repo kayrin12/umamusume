@@ -176,7 +176,7 @@ class Guides(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'notes.md'
             path.write_text('核验笔记', 'utf-8')
-            base = dict(id='OK',status='verified',server='tw',scenario='legendary',goal='rating',rules=['已确认的规则'])
+            base = dict(id='OK',status='verified',server='tw',origin_server='tw',tw_applicability='verified',scenario='legendary',goal='rating',rules=['已确认的规则'])
             entries = [base,
                        base | {'id': 'JP', 'server': 'jp'},
                        base | {'id': 'UAF', 'scenario': 'uaf'},

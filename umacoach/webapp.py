@@ -13,6 +13,7 @@ import urllib.request
 from . import __version__
 from .capture import CaptureError, windows
 from .session import ROOT, Session
+from .run_state import StateError
 
 
 class Server(ThreadingHTTPServer):
@@ -123,6 +124,8 @@ class Handler(BaseHTTPRequestHandler):
                 session.select_region(data['selection_id'], data['rect'])
             elif action in ('new', 'resume', 'abandon'):
                 session.boundary(action)
+            elif action == 'state_correct':
+                session.correct_state(data['run_id'], data['revision'], data['values'])
             elif action == 'auto':
                 if type(data.get('enabled')) is not bool:
                     raise ValueError('缺少读取状态')
@@ -135,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 raise ValueError('未知操作')
             self.reply(200, {'ok': True})
-        except CaptureError as error:
+        except (CaptureError, StateError) as error:
             self.reply(400, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             self.reply(400, {'error': '操作未完成，请检查窗口选择、配置或图片；如果正在分析，请稍候。'})

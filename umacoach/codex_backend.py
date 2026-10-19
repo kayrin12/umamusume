@@ -116,6 +116,7 @@ def open_login():
 
 
 def schema():
+    from .run_state import update_schema
     strings = ('character', 'date_text', 'recommendation', 'reason')
     arrays = ('evidence', 'missing', 'alternatives', 'guide_refs')
     properties = {k: {'type': 'string'} for k in strings}
@@ -123,6 +124,7 @@ def schema():
     properties.update(scene={'type': 'string', 'enum': ['unknown', 'title', 'run_start', 'training', 'event', 'race', 'skills', 'abandon_dialog', 'abandon_confirmed', 'result']},
                       confidence={'type': 'number', 'minimum': 0, 'maximum': 1},
                       turn_index={'type': ['integer', 'null'], 'minimum': 0, 'maximum': 95})
+    properties['state_update'] = update_schema()
     return dict(type='object', additionalProperties=False, properties=properties, required=list(properties))
 
 

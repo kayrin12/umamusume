@@ -1,9 +1,14 @@
 # Windows 便携版下载
 
-点击 ZIP 文件后使用 GitHub 的 Download raw file 下载完整包。
+- [v0.4.0 完整包（约22MB）](umacoach-windows-portable-x64-v0.4.0.zip)
+- [v0.3 → v0.4.0 小型升级包](umacoach-upgrade-v0.3-to-v0.4.0.zip)
 
-完整解压后进入 umacoach 文件夹，双击 start.bat。不要打开 panel.html 或使用聊天预览。无需系统 Python。
+已有v0.3：先退出助手，将升级包顶层umacoach文件夹与旧版顶层同名文件夹合并，覆盖同名文件；保留原.runtime和local-data，在原目录运行start.bat。可复用已安装的Codex，避免重复占用空间。
 
-v0.3.0 新增官方 Codex ChatGPT 账号登录，无需 API Key；首次准备时自动下载约162MB官方组件，使用账号Codex额度与限额。完成官方登录后点“检查登录状态”，再分析游戏画面。旧v0.2.1保留作兼容下载，仅支持API分析。
+首次安装：完整解压完整包，进入umacoach文件夹双击start.bat，无需系统Python。不要直接打开panel.html或使用聊天预览。
 
-已通过59项自动测试；账号认证和模型结果在自动检查中使用模拟，真实Windows登录和账号额度需要用户本机验证。
+v0.4接入三份跨服推定攻略、结构化整局状态与手动修正。低置信度不覆盖确认值；未知不会记成0，新局清空。资料和识别仍有限制，不保证最优或达到UB。
+
+ChatGPT模式使用官方Codex账号额度。首次下载约162MB组件，解压约449MB；完整便携包本身不含该组件。API模式独立计费。真实Windows登录与游戏效果需本机验收。
+
+每个ZIP有对应.sha256。旧版保留供兼容使用。
