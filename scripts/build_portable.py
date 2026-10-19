@@ -18,7 +18,9 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT/'local-data/portable-build'
 OUTPUT = ROOT.parent/'artifacts/umacoach-windows-portable-x64.zip'
-UPGRADE = ROOT.parent/'artifacts/umacoach-upgrade-v0.3-to-v0.4.0.zip'
+RELEASE = next(ast.literal_eval(node.value) for node in ast.parse((ROOT/'umacoach/__init__.py').read_text('utf-8')).body
+               if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == '__version__' for target in node.targets))
+UPGRADE = ROOT.parent/f'artifacts/umacoach-upgrade-to-v{RELEASE}.zip'
 PYTHON = '3.13.16'
 PILLOW = '12.3.0'
 

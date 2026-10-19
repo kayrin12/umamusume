@@ -26,6 +26,10 @@ from .run_state import StateError, context_state, merge_state
 ROOT = Path(__file__).resolve().parent.parent
 
 
+class ActionError(ValueError):
+    """An explicitly written, credential-free message safe for the panel."""
+
+
 class Session:
     def __init__(self, data_dir: Path):
         self.lock = threading.RLock()
@@ -93,7 +97,7 @@ class Session:
         with self.lock:
             provider = data.get('provider', self.provider)
             if provider not in ('codex', 'api'):
-                raise ValueError('请选择 ChatGPT 账号或视觉 API')
+                raise ActionError('请选择 ChatGPT 账号或视觉 API')
             hwnd = data.get('hwnd')
             if hwnd == 'region':
                 if self.region is None:
@@ -110,8 +114,10 @@ class Session:
                 label = labels.get(hwnd, self.target_label if hwnd == self.hwnd else '')
             endpoint = data.get('endpoint', self.endpoint).strip()
             model = data.get('model', self.model).strip()
-            if not endpoint or not model:
-                raise ValueError('请填写 API 地址和模型；尚无密钥也能使用本地预览')
+            if provider == 'api' and (not endpoint or not model):
+                raise ActionError('请填写视觉 API 地址和模型；尚无密钥也能使用本地预览')
+            if provider == 'codex':
+                endpoint, model = endpoint or self.endpoint, model or self.model
             self.hwnd, self.endpoint, self.model = hwnd, endpoint, model
             self.provider = provider
             self.region, self.target_label = region, label
@@ -130,7 +136,7 @@ class Session:
 
     def set_provider(self, provider):
         if provider not in ('codex', 'api'):
-            raise ValueError('请选择支持的分析方式')
+            raise ActionError('请选择支持的分析方式')
         with self.lock:
             self.provider = provider
             self.auto = False
@@ -151,7 +157,7 @@ class Session:
     def login_codex(self):
         with self.lock:
             if self.codex_busy:
-                raise ValueError('正在准备登录，请稍候')
+                raise ActionError('正在准备登录，请稍候')
             self.auto = False
             self.epoch += 1
             self.result = None
@@ -291,7 +297,7 @@ class Session:
             elif kind == 'abandon':
                 self.tracker.close('manual_abandon')
             else:
-                raise ValueError('未知局次操作')
+                raise ActionError('未知局次操作')
             self.status = '局次已更新，旧建议已清除。'
 
     def set_frame(self, frame):
@@ -304,15 +310,15 @@ class Session:
 
     def import_image(self, data):
         if len(data) > 12_000_000:
-            raise ValueError('图片过大，请使用小于8MB的截图')
+            raise ActionError('图片过大，请使用小于8MB的截图')
         raw = base64.b64decode(data, validate=True)
         with Image.open(BytesIO(raw)) as image:
             if image.width*image.height > 24_000_000:
-                raise ValueError('图片尺寸过大')
+                raise ActionError('图片尺寸过大')
             frame = image.convert('RGB')
         with self.lock:
             if self.busy:
-                raise ValueError('请等待当前分析完成再导入')
+                raise ActionError('请等待当前分析完成再导入')
             self.epoch += 1
             self.auto, self.sample = False, True
             self.result = None
@@ -324,12 +330,12 @@ class Session:
     def read_now(self):
         with self.lock:
             if self.busy:
-                raise ValueError('上一张画面仍在分析，请稍候')
+                raise ActionError('上一张画面仍在分析，请稍候')
             if self.sample and self.frame is not None:
                 frame = self.frame.copy()
             else:
                 if self.hwnd is None and self.region is None:
-                    raise ValueError('请先选择游戏窗口并应用配置，或导入截图')
+                    raise ActionError('请先在上方选择游戏窗口并应用配置，或使用前台选择、手动框选、导入截图')
                 try:
                     frame = self.read_frame()
                     self.capture_error = ''
@@ -348,7 +354,7 @@ class Session:
     def toggle(self, enabled):
         with self.lock:
             if enabled and self.hwnd is None and self.region is None:
-                raise ValueError('请先选择游戏窗口并应用配置')
+                raise ActionError('请先选择游戏窗口并应用配置')
             self.auto = enabled
             self.epoch += 1
             self.gate = Gate()
@@ -382,7 +388,7 @@ class Session:
     def submit(self, frame, sample):
         # Caller holds the reentrant lock; only one worker may be in flight.
         if self.busy:
-            raise ValueError('上一张画面仍在分析')
+            raise ActionError('上一张画面仍在分析')
         self.busy = True
         self.requested_at = time.monotonic()
         epoch, endpoint, key, model = self.epoch, self.endpoint, self.key, self.model

@@ -9,7 +9,7 @@
 .card{background:#19251d;border:1px solid #2f4435;border-radius:16px;padding:20px;margin:14px 0}.settings{display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:12px}label{display:block;font-size:13px;color:#c1d1c6;margin-bottom:7px}input,select,button{font:inherit;border-radius:9px;padding:10px 12px;border:1px solid #465e4d;background:#111c15;color:#eaf3ed}input,select{width:100%}button{cursor:pointer;white-space:nowrap}button:hover{background:#2d4735}button.primary{background:#a5eb81;border-color:#a5eb81;color:#16240d;font-weight:700}button.danger{color:#ffb7af}button:disabled{opacity:.5;cursor:wait}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}.row select{flex:1;min-width:200px}.layout{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px}.screen{display:flex;justify-content:center;align-items:center;min-height:360px;background:#0c120e;border-radius:10px;overflow:hidden}.screen img{max-width:100%;max-height:640px}.hint{font-size:13px;color:#a6b7ab;line-height:1.7}.status{padding:14px 18px;background:#263d2b;border-radius:10px;line-height:1.6}.run{color:#c1e7b5;font-size:14px;margin:14px 0}.advice{font-size:23px;color:#c4f29e;line-height:1.5;white-space:pre-wrap}.reason{white-space:pre-wrap;line-height:1.8}li{color:#c0d1c5;line-height:1.8}h2{font-size:17px}h3{font-size:14px;margin-top:24px}.error{color:#ffb7af;min-height:22px}footer{font-size:12px;color:#9eb1a4;margin:25px 0}#upload{display:none}@media(max-width:850px){.settings,.layout{grid-template-columns:1fr}body{padding:15px}}
 dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:14px;max-width:95vw;max-height:94vh;padding:18px}dialog::backdrop{background:#000b}#crop{display:block;max-width:90vw;max-height:65vh;cursor:crosshair;touch-action:none}#diagnostics{white-space:pre-wrap;font-size:12px}#target{color:#c1e7b5}.capture-actions{border-top:1px solid #2f4435;padding-top:14px}
 </style>
-<header><span class="badge">繁中服 · 本机只读辅助 · v0.4 整局状态记录</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
+<header><span class="badge">繁中服 · 本机只读辅助 · v0.4.1 窗口选择修复</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
 <section id="connection-warning" class="card" hidden role="alert"><h2>尚未连接本机助手</h2><p id="connection-help"></p><p class="hint">请完整解压下载包，双击 start.bat，并使用它自动打开的页面。若未自动打开，复制启动窗口显示的“本机面板地址”到浏览器。不要直接打开 panel.html 或下载预览页。</p></section>
 <section class="card">
  <label for="provider">分析方式</label><select id="provider"><option value="codex">使用 ChatGPT 账号（官方 Codex 登录）</option><option value="api">使用视觉 API 密钥</option></select>
@@ -19,7 +19,7 @@ dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:1
   <div><label for="model">视觉模型</label><input id="model" value="gpt-4.1-mini" spellcheck="false"></div>
   <div><label for="key">API 密钥 · 仅内存保存</label><input id="key" type="password" placeholder="留空可先本地预览" autocomplete="off"></div>
  </div>
- <div class="row"><select id="window" aria-label="游戏窗口"><option value="">选择游戏窗口</option></select><button id="refresh">刷新窗口</button><button id="configure">应用配置</button></div>
+ <div class="row"><select id="window" aria-label="游戏窗口"><option value="">选择游戏窗口</option></select><button id="refresh">刷新窗口</button><button id="configure">应用配置</button></div><p class="hint">选好窗口后可直接点击“立即读取 / 分析”或“开始持续读取”，会自动应用所选窗口与配置。</p>
  <p class="hint" id="window-count"></p>
  <div class="row capture-actions"><button id="pick">3秒后选择前台窗口</button><button id="region">手动框选游戏画面</button><button id="diagnose">查看读取诊断</button></div>
  <p class="hint">列表里没有游戏？点“3秒后选择前台窗口”，立即切回游戏。也可用“手动框选”：桌面截图仅在本机用于选区，确认后只读取选中的区域；游戏移动后需重新框选。</p>
@@ -102,15 +102,16 @@ function syncTarget(){
  if(value&&!Array.from($('window').options).some(o=>o.value===value))$('window').add(new Option(state.target_label||'前台选择的窗口',value));
  $('window').value=value;
 }
-async function refresh(){try{const list=await api('/api/windows');$('window').replaceChildren(new Option('选择游戏窗口',''));for(const item of list)$('window').add(new Option(item.title+' ['+item.hwnd+']',item.hwnd));syncTarget();$('window-count').textContent='检测到 '+list.length+' 个可见窗口。没有游戏时可用下面两种选择方式。';}catch(e){$('error').textContent=e.message;$('window-count').textContent='窗口列表读取失败，可使用前台选择或手动框选。';}}
+async function refresh(){try{const selected=$('window').value,list=await api('/api/windows');$('window').replaceChildren(new Option('选择游戏窗口',''));for(const item of list)$('window').add(new Option(item.title+' ['+item.hwnd+']',item.hwnd));syncTarget();if(selected&&Array.from($('window').options).some(o=>o.value===selected))$('window').value=selected;showTarget();$('window-count').textContent='检测到 '+list.length+' 个可见窗口。没有游戏时可用下面两种选择方式。';}catch(e){$('error').textContent=e.message;$('window-count').textContent='窗口列表读取失败，可使用前台选择或手动框选。';}}
+function showTarget(){const chosen=$('window').value,current=state.region?'region':state.hwnd?String(state.hwnd):'';$('target').textContent=chosen&&chosen!==current?'已选择：'+$('window').selectedOptions[0].text+'；点击读取将自动应用。':state.target_label?'当前读取目标：'+state.target_label:'尚未选择读取目标，请先在上方选择游戏窗口。';}
 async function poll(){
  try{
   if(!correctPage){disconnected('当前打开的不是本机助手页面，请双击解压目录中的 start.bat。');return;}
   if(!verified){const health=await api('/api/health');if(health.service!=='umacoach'||health.instance_id!==expectedInstance)throw new Error('页面与运行中的助手不是同一个实例，请使用本次启动窗口显示的地址。');verified=true;}
   state=await api('/api/state');$('status').textContent=state.status;$('auto').textContent=state.auto?'暂停读取':'开始持续读取';
   connected=true;controls();$('connection-warning').hidden=true;
-  $('target').textContent=state.target_label?'当前读取目标：'+state.target_label:'尚未选择读取目标';
   const target=JSON.stringify([state.hwnd,state.region]);if(target!==lastTarget){lastTarget=target;syncTarget();}
+  showTarget();
   $('run').textContent=(state.pending?'需要确认局次 · ':'')+(state.run_id?'本局 '+state.run_id+' · '+(state.character||'角色待识别'):'无进行中的局次')+(state.sample?' · 截图样本模式':'');
   renderRunState();
   if(first){$('provider').value=state.provider||'codex';showProvider();$('endpoint').value=state.endpoint;$('model').value=state.model;if(state.has_key)$('key').placeholder='已从环境加载密钥；留空保留';first=false;}
@@ -148,8 +149,21 @@ function closeSelection(){selection=null;background=null;rect=null;start=null;ca
 $('cancel-region').onclick=closeSelection;
 $('region-dialog').oncancel=closeSelection;
 $('confirm-region').onclick=async()=>{try{await api('/api/action',{action:'region_select',selection_id:selection.selection_id,rect});closeSelection();await poll();}catch(e){$('crop-error').textContent=e.message;}};
-$('configure').onclick=async()=>{const applied=await action({action:'configure',provider:$('provider').value,hwnd:$('window').value,endpoint:$('endpoint').value,model:$('model').value,key:$('key').value});if(applied){$('key').value='';if(state.has_key)$('key').placeholder='本次已配置；留空保留';}};
-$('auto').onclick=()=>action({action:'auto',enabled:!state.auto});$('read').onclick=()=>action({action:'read'});
+function configuration(){return {action:'configure',provider:$('provider').value,hwnd:$('window').value,endpoint:$('endpoint').value,model:$('model').value,key:$('key').value};}
+async function applyConfiguration(){const applied=await action(configuration());if(applied){$('key').value='';$('diagnostics').hidden=true;if(state.has_key)$('key').placeholder='本次已配置；留空保留';}return applied;}
+async function ensureTarget(allowSample){
+ if(allowSample&&state.sample)return true;
+ const chosen=$('window').value,current=state.region?'region':state.hwnd?String(state.hwnd):'';
+ if(!chosen){$('error').textContent='请先在上方选择游戏窗口；列表里没有游戏时，可用“3秒后选择前台窗口”或“手动框选游戏画面”。';$('window').focus();return false;}
+ const apiChanged=$('provider').value==='api'&&($('key').value.trim()||$('endpoint').value!==state.endpoint||$('model').value!==state.model);
+ if(chosen!==current||$('provider').value!==state.provider||apiChanged)return applyConfiguration();
+ return true;
+}
+let readingAction=false;
+async function readAction(continuous){if(readingAction)return;readingAction=true;try{if(continuous&&state.auto){await action({action:'auto',enabled:false});return;}if(await ensureTarget(!continuous))await action(continuous?{action:'auto',enabled:true}:{action:'read'});}finally{readingAction=false;}}
+$('window').onchange=()=>{$('error').textContent='';showTarget();};
+$('configure').onclick=applyConfiguration;
+$('auto').onclick=()=>readAction(true);$('read').onclick=()=>readAction(false);
 for(const b of document.querySelectorAll('[data-boundary]'))b.onclick=()=>action({action:b.dataset.boundary});
 $('import').onclick=()=>$('upload').click();
 $('upload').onchange=async()=>{const file=$('upload').files[0];if(!file)return;if(file.size>8_000_000){$('error').textContent='请选择小于8MB的截图。';return;}const reader=new FileReader();reader.onload=()=>action({action:'import',image:reader.result.split(',')[1]});reader.readAsDataURL(file);$('upload').value='';};

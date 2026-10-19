@@ -12,7 +12,7 @@ import urllib.request
 
 from . import __version__
 from .capture import CaptureError, windows
-from .session import ROOT, Session
+from .session import ROOT, Session, ActionError
 from .run_state import StateError
 
 
@@ -138,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 raise ValueError('未知操作')
             self.reply(200, {'ok': True})
-        except (CaptureError, StateError) as error:
+        except (CaptureError, StateError, ActionError) as error:
             self.reply(400, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             self.reply(400, {'error': '操作未完成，请检查窗口选择、配置或图片；如果正在分析，请稍候。'})

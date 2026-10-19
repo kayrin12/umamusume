@@ -1,13 +1,13 @@
 # Windows 便携版下载
 
-- [v0.4.0 完整包（约22MB）](umacoach-windows-portable-x64-v0.4.0.zip)
-- [v0.3 → v0.4.0 小型升级包](umacoach-upgrade-v0.3-to-v0.4.0.zip)
+- [v0.4.1 完整包（约22MB）](umacoach-windows-portable-x64-v0.4.1.zip)
+- [v0.3 / v0.4 → v0.4.1 小型升级包](umacoach-upgrade-to-v0.4.1.zip)
 
-已有v0.3：先退出助手，将升级包顶层umacoach文件夹与旧版顶层同名文件夹合并，覆盖同名文件；保留原.runtime和local-data，在原目录运行start.bat。可复用已安装的Codex，避免重复占用空间。
+已有v0.3/v0.4：先退出助手，将升级包顶层umacoach文件夹与旧版顶层同名文件夹合并，覆盖同名文件；保留原.runtime和local-data，在原目录运行start.bat。可复用已安装的Codex，避免重复占用空间。
 
 首次安装：完整解压完整包，进入umacoach文件夹双击start.bat，无需系统Python。不要直接打开panel.html或使用聊天预览。
 
-v0.4接入三份跨服推定攻略、结构化整局状态与手动修正。低置信度不覆盖确认值；未知不会记成0，新局清空。资料和识别仍有限制，不保证最优或达到UB。
+v0.4.1修复选中窗口后未应用导致无法读取的问题，读取时自动应用，并显示具体操作错误。v0.4接入三份跨服推定攻略、结构化整局状态与手动修正。低置信度不覆盖确认值；未知不会记成0，新局清空。资料和识别仍有限制，不保证最优或达到UB。
 
 ChatGPT模式使用官方Codex账号额度。首次下载约162MB组件，解压约449MB；完整便携包本身不含该组件。API模式独立计费。真实Windows登录与游戏效果需本机验收。
 

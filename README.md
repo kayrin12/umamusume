@@ -1,4 +1,4 @@
-# 赛马娘繁中服 · 养成助手 v0.4
+# 赛马娘繁中服 · 养成助手 v0.4.1
 
 Windows 10/11 64位只读辅助：读取可见游戏画面，通过 ChatGPT 账号（官方 Codex）或视觉 API 提供下一步建议，独立记录每次养成。不自动点击、不读游戏内存、不修改游戏文件。
 
@@ -6,14 +6,20 @@ Windows 10/11 64位只读辅助：读取可见游戏画面，通过 ChatGPT 账�
 
 ## 下载与升级
 
-- [v0.4.0 完整便携包，约22MB](https://github.com/kayrin12/umamusume/raw/refs/heads/codex/portable-delivery/downloads/umacoach-windows-portable-x64-v0.4.0.zip)：自带 Python 3.13.16、Pillow 12.3.0，无需自行安装 Python、Node 或管理员权限。
-- [v0.3 → v0.4.0 小型升级包](https://github.com/kayrin12/umamusume/raw/refs/heads/codex/portable-delivery/downloads/umacoach-upgrade-v0.3-to-v0.4.0.zip)：仅包含代码、攻略和说明，不包含运行环境。适合已有 v0.3 的用户，避免重复下载和占用空间。
+- [v0.4.1 完整便携包，约22MB](https://github.com/kayrin12/umamusume/raw/refs/heads/codex/portable-delivery/downloads/umacoach-windows-portable-x64-v0.4.1.zip)：自带 Python 3.13.16、Pillow 12.3.0，无需自行安装 Python、Node 或管理员权限。
+- [v0.3 / v0.4 → v0.4.1 小型升级包](https://github.com/kayrin12/umamusume/raw/refs/heads/codex/portable-delivery/downloads/umacoach-upgrade-to-v0.4.1.zip)：仅包含代码、攻略和说明，不包含运行环境。适合已有 v0.3 或 v0.4 的用户，避免重复下载和占用空间。
 
-升级前点击“退出助手”，关闭旧进程。将升级包中的顶层 `umacoach` 文件夹与原包顶层同名文件夹合并，覆盖同名文件。**保留原来的 `.runtime` 和 `local-data` 文件夹**，然后在原目录双击 `start.bat`；页面应显示“v0.4 整局状态记录”。安装过的 Codex 组件将复用，升级不要求重新下载。不要把升级包作为独立完整安装使用。
+升级前点击“退出助手”，关闭旧进程。将升级包中的顶层 `umacoach` 文件夹与原包顶层同名文件夹合并，覆盖同名文件。**保留原来的 `.runtime` 和 `local-data` 文件夹**，然后在原目录双击 `start.bat`；页面应显示“v0.4.1 窗口选择修复”。安装过的 Codex 组件将复用，升级不要求重新下载。不要把升级包作为独立完整安装使用。
 
 首次安装则完整解压便携包，进入 `umacoach` 文件夹，双击 `start.bat`。必须运行本机程序，聊天预览、直接打开 `panel.html` 都不能读取本机窗口。浏览器未自动打开时，复制启动窗口显示的本机面板地址。关闭网页不会停止后台，请点击“退出助手”。
 
 完整包没有附带大型攻略图片、视频或 Codex 二进制，体积与 v0.3 接近。ChatGPT 模式首次使用仍需下载约162MB的官方 Codex 组件，解压约449MB；原 v0.3 已安装的组件可复用。这部分磁盘需求不包含在22MB便携包内。
+
+## v0.4.1 修复
+
+选中窗口后点击“立即读取 / 分析”或“开始持续读取”，自动应用当前窗口及配置，避免下拉已选中但实际目标仍为空。刷新列表保留待应用的选择。缺少窗口或正在分析等预期错误会显示具体原因，未知异常仍隐藏内部细节。ChatGPT模式不再要求隐藏的API地址与模型输入框非空。
+
+可用 `python scripts/check_window_panel.py` 运行浏览器回归检查，需要额外安装Playwright并准备Chromium；检查使用模拟捕获和模型，不消耗账号额度。
 
 ## v0.4 的改动
 
@@ -47,7 +53,7 @@ Windows 10/11 64位只读辅助：读取可见游戏画面，通过 ChatGPT 账�
 
 ## 开始使用
 
-1. 游戏使用窗口模式，保持可见、不被其他窗口遮挡。助手中刷新窗口，选择游戏并“应用配置”。
+1. 游戏使用窗口模式，保持可见、不被其他窗口遮挡。助手中刷新窗口，选择游戏；直接点击读取会自动应用，也可点“应用配置”。
 2. 列表没有游戏时用“3秒后选择前台窗口”，立即切回游戏；也可手动框选。桌面预览仅用于本机选区，之后只分析选中区域，游戏移动后需重新框选。
 3. 默认“使用 ChatGPT 账号”，点击“使用 ChatGPT 登录”，在官方页面登录，再回到助手“检查登录状态”。需要可用的账号 Codex 额度，套餐、限额与组织策略以官方为准；不是直接复用当前聊天。
 4. 也可自行切换视觉 API，填写地址、模型和密钥。默认 API 模型 gpt-4.1-mini，API独立计费。账号模式不会自动切换 API 计费。
@@ -87,4 +93,4 @@ Windows源码版可运行 `start.bat`。测试覆盖状态部分合并、低置�
 
 Windows验收仍需真实登录和额度、繁中UI识别、完整开局→训练→放弃→重开→结算，以及实战建议质量。当前Linux构建机不能直接执行Windows二进制。
 
-本次云端验证：85项自动测试通过；真实Chromium已检查全部状态表单、替换记录、模型状态合并、版本冲突和新局清空，未出现JavaScript错误。Codex结构化输出Schema也通过JSON Schema验证。浏览器检查中的截图及模型返回是模拟数据，没有消费用户账号额度。
+本次云端验证：89项自动测试通过；真实Chromium已检查全部状态表单、替换记录、模型状态合并、版本冲突和新局清空，未出现JavaScript错误。Codex结构化输出Schema也通过JSON Schema验证。浏览器检查中的截图及模型返回是模拟数据，没有消费用户账号额度。

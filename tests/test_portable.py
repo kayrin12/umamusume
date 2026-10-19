@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from umacoach.session import Session
+from umacoach.session import Session, ActionError
 from umacoach.capture import CaptureError
 from umacoach.webapp import Server, check_local_server
 
@@ -56,6 +56,17 @@ class Portable(unittest.TestCase):
         self.assertTrue(s.snapshot()['has_key'])
         self.assertNotIn('private-test-token', json.dumps(s.snapshot()))
         self.assertFalse(list(Path(self.tmp.name).glob('*')))
+
+    def test_account_configuration_does_not_require_hidden_api_fields(self):
+        s=self.session
+        with patch('umacoach.session.windows',return_value=[(123,'赛马娘')]):
+            s.configure(dict(provider='codex',hwnd=123,endpoint='',model=''))
+        self.assertEqual(s.hwnd,123)
+        self.assertEqual(s.provider,'codex')
+
+    def test_api_configuration_still_requires_endpoint_and_model(self):
+        with self.assertRaises(ActionError):
+            self.session.configure(dict(provider='api',endpoint='',model=''))
 
     def test_old_run_worker_response_cannot_enter_new_run(self):
         s = self.session
@@ -267,6 +278,21 @@ class HTTP(unittest.TestCase):
                 self.request('/api/windows')
         self.assertEqual(caught.exception.code, 503)
         self.assertEqual(json.load(caught.exception)['error'], '枚举失败，请框选')
+
+    def test_read_without_applied_window_returns_actionable_message(self):
+        for body in [dict(action='read'),dict(action='auto',enabled=True)]:
+            with self.subTest(action=body['action']),self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request('/api/action',body)
+            self.assertEqual(caught.exception.code,400)
+            error=json.load(caught.exception)['error']
+            self.assertIn('选择游戏窗口',error)
+            self.assertNotIn('操作未完成',error)
+
+    def test_unexpected_validation_error_does_not_leak_internal_details(self):
+        with patch.object(self.server.session,'read_now',side_effect=ValueError('private-test-secret')):
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request('/api/action',dict(action='read'))
+        self.assertNotIn('private-test-secret',json.load(caught.exception)['error'])
 
     def test_diagnostics_does_not_return_key(self):
         self.server.session.key = 'private-test'
