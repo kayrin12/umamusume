@@ -1,0 +1,8 @@
+{
+  "name": "@openai/codex",
+  "version": "0.159.2-win32-x64",
+  "url": "https://registry.npmjs.org/@openai/codex/-/codex-0.159.2-win32-x64.tgz",
+  "integrity": "sha512-1ZJVTO40/ZaHPUUWc3uCX73jwzJRaDxAjRQEf37dC5Q3h1fp/Z7+1L8oX3bPlXgjhEY6kHW3rm0wz2sdQ5rxNw==",
+  "signature_keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+  "npm_ecdsa_signature_verified": true
+}

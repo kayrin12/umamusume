@@ -106,8 +106,14 @@ class Handler(BaseHTTPRequestHandler):
             action, session = data['action'], self.server.session
             if action == 'configure':
                 session.configure(data)
+            elif action == 'provider':
+                session.set_provider(data['provider'])
             elif action == 'read':
                 session.read_now()
+            elif action == 'codex_login':
+                session.login_codex()
+            elif action == 'codex_check':
+                session.check_codex()
             elif action == 'pick':
                 session.pick_window()
             elif action == 'region_prepare':

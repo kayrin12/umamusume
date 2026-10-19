@@ -5,14 +5,16 @@
 <title>赛马娘 · 养成助手</title>
 <style>
 :root{color-scheme:dark;font-family:"Microsoft YaHei UI",system-ui,sans-serif;background:#101713;color:#eaf3ed}
-*{box-sizing:border-box}body{max-width:1200px;margin:auto;padding:28px}h1{font-size:27px;margin:0 0 7px}p{color:#acbfb1;line-height:1.6}header{margin-bottom:22px}.badge{display:inline-block;font-size:12px;padding:5px 10px;border:1px solid #476951;border-radius:20px;color:#b2efbb}
+*{box-sizing:border-box}[hidden]{display:none!important}body{max-width:1200px;margin:auto;padding:28px}h1{font-size:27px;margin:0 0 7px}p{color:#acbfb1;line-height:1.6}header{margin-bottom:22px}.badge{display:inline-block;font-size:12px;padding:5px 10px;border:1px solid #476951;border-radius:20px;color:#b2efbb}
 .card{background:#19251d;border:1px solid #2f4435;border-radius:16px;padding:20px;margin:14px 0}.settings{display:grid;grid-template-columns:2fr 1fr 1.5fr;gap:12px}label{display:block;font-size:13px;color:#c1d1c6;margin-bottom:7px}input,select,button{font:inherit;border-radius:9px;padding:10px 12px;border:1px solid #465e4d;background:#111c15;color:#eaf3ed}input,select{width:100%}button{cursor:pointer;white-space:nowrap}button:hover{background:#2d4735}button.primary{background:#a5eb81;border-color:#a5eb81;color:#16240d;font-weight:700}button.danger{color:#ffb7af}button:disabled{opacity:.5;cursor:wait}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px}.row select{flex:1;min-width:200px}.layout{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px}.screen{display:flex;justify-content:center;align-items:center;min-height:360px;background:#0c120e;border-radius:10px;overflow:hidden}.screen img{max-width:100%;max-height:640px}.hint{font-size:13px;color:#a6b7ab;line-height:1.7}.status{padding:14px 18px;background:#263d2b;border-radius:10px;line-height:1.6}.run{color:#c1e7b5;font-size:14px;margin:14px 0}.advice{font-size:23px;color:#c4f29e;line-height:1.5;white-space:pre-wrap}.reason{white-space:pre-wrap;line-height:1.8}li{color:#c0d1c5;line-height:1.8}h2{font-size:17px}h3{font-size:14px;margin-top:24px}.error{color:#ffb7af;min-height:22px}footer{font-size:12px;color:#9eb1a4;margin:25px 0}#upload{display:none}@media(max-width:850px){.settings,.layout{grid-template-columns:1fr}body{padding:15px}}
 dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:14px;max-width:95vw;max-height:94vh;padding:18px}dialog::backdrop{background:#000b}#crop{display:block;max-width:90vw;max-height:65vh;cursor:crosshair;touch-action:none}#diagnostics{white-space:pre-wrap;font-size:12px}#target{color:#c1e7b5}.capture-actions{border-top:1px solid #2f4435;padding-top:14px}
 </style>
-<header><span class="badge">繁中服 · 本机只读辅助 · v0.2.1 连接检查更新</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
+<header><span class="badge">繁中服 · 本机只读辅助 · v0.3 ChatGPT 账号模式</span><h1>赛马娘养成助手</h1><p>让画面留在本机读取，在关键回合查看建议。每次养成独立记录。</p></header>
 <section id="connection-warning" class="card" hidden role="alert"><h2>尚未连接本机助手</h2><p id="connection-help"></p><p class="hint">请完整解压下载包，双击 start.bat，并使用它自动打开的页面。若未自动打开，复制启动窗口显示的“本机面板地址”到浏览器。不要直接打开 panel.html 或下载预览页。</p></section>
 <section class="card">
- <div class="settings">
+ <label for="provider">分析方式</label><select id="provider"><option value="codex">使用 ChatGPT 账号（官方 Codex 登录）</option><option value="api">使用视觉 API 密钥</option></select>
+ <div id="codex-settings"><div class="row"><button class="primary" id="codex-login">使用 ChatGPT 登录</button><button id="codex-check">检查登录状态</button><span id="codex-status" class="hint">等待检查</span></div><p class="hint">无需 API Key，使用账号的 Codex 额度，套餐及限额以官方账号为准。首次自动下载约162MB官方组件；登录只在官方页面完成。完成后回到这里检查登录状态，再分析游戏画面。</p></div>
+ <div class="settings" id="api-settings" hidden>
   <div><label for="endpoint">视觉 API 根地址</label><input id="endpoint" value="https://api.openai.com/v1" spellcheck="false"></div>
   <div><label for="model">视觉模型</label><input id="model" value="gpt-4.1-mini" spellcheck="false"></div>
   <div><label for="key">API 密钥 · 仅内存保存</label><input id="key" type="password" placeholder="留空可先本地预览" autocomplete="off"></div>
@@ -22,7 +24,7 @@ dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:1
  <div class="row capture-actions"><button id="pick">3秒后选择前台窗口</button><button id="region">手动框选游戏画面</button><button id="diagnose">查看读取诊断</button></div>
  <p class="hint">列表里没有游戏？点“3秒后选择前台窗口”，立即切回游戏。也可用“手动框选”：桌面截图仅在本机用于选区，确认后只读取选中的区域；游戏移动后需重新框选。</p>
  <p id="target" class="hint">尚未选择读取目标</p><pre id="diagnostics" hidden></pre>
- <p class="hint">先选窗口并应用配置。未填写 API 密钥时可本地预览；配置后，分析截图会上传至你选择的 API 服务，可能计费。请让游戏窗口保持可见、未被遮挡。</p>
+ <p class="hint">先选窗口并应用配置。未完成登录也能本地预览；开始 AI 分析时会把所选游戏截图发送给对应模型服务。ChatGPT 模式使用 Codex 额度；API 模式单独计费。请让游戏窗口保持可见、未被遮挡。</p>
 </section>
 <div class="row"><button class="primary" id="auto">开始持续读取</button><button id="read">立即读取 / 分析</button><button id="import">导入截图</button><input id="upload" type="file" accept="image/png,image/jpeg,image/webp"><button class="danger" id="exit">退出助手</button></div>
 <p id="error" class="error" role="alert"></p>
@@ -30,10 +32,10 @@ dialog{background:#19251d;color:#eaf3ed;border:1px solid #63836a;border-radius:1
 <div class="run" id="run">等待养成开始</div>
 <div class="row"><button data-boundary="new">记录为新局</button><button data-boundary="resume">继续当前局</button><button data-boundary="abandon">本局已放弃</button></div>
 <main class="layout">
- <section class="card"><h2>游戏画面</h2><div class="screen"><img id="preview" alt="尚未捕获游戏画面" hidden></div><p class="hint">每秒本地采样。画面变化后才触发 AI 分析，自动请求至少间隔 8 秒；动画也可能触发分析。不会录制视频或保存原始截图。</p></section>
+ <section class="card"><h2>游戏画面</h2><div class="screen"><img id="preview" alt="尚未捕获游戏画面" hidden></div><p class="hint">每秒本地采样。画面变化后才分析，ChatGPT 模式自动分析至少间隔30秒，API模式至少8秒；实际延迟取决于模型。不会录制视频。Codex模式临时截图在分析结束后清理。</p></section>
  <section class="card"><h2>当前回合建议</h2><div class="advice" id="advice">选择窗口后即可先预览画面。</div><p class="reason" id="reason"></p><div id="details"></div><p class="hint">攻略尚在核验，不能保证每回合最优或达到 UB。未看到所有训练预览时，不会虚构其他选项的收益。疑似重开时需确认局次，再恢复建议。</p></section>
 </main>
-<footer>密钥不写入文件。关闭浏览器标签页不会关闭后台程序，请点击“退出助手”或关闭启动时的命令窗口。局次和识别文字存于 local-data，可关闭程序后删除。</footer>
+<footer>API密钥仅保留在内存；ChatGPT登录由官方Codex管理，本程序不读取登录令牌。关闭浏览器标签页不会退出后台，请点击“退出助手”或关闭命令窗口。局次和识别文字存于local-data，强制退出后可清理残留临时截图。</footer>
 <dialog id="region-dialog"><h2>框选游戏画面</h2><p class="hint">在下图拖动框出游戏画面。此桌面截图仅在本机显示，不会用于 AI 分析。确认后仅读取所选区域。</p><canvas id="crop"></canvas><div class="row"><button class="primary" id="confirm-region" disabled>确认游戏区域</button><button id="cancel-region">取消</button><span id="crop-status" class="hint">请拖动选择</span></div><p id="crop-error" class="error"></p></dialog>
 <script nonce="__TOKEN__">
 'use strict';
@@ -41,9 +43,10 @@ const token='__TOKEN__', expectedOrigin='__LOCAL_ORIGIN__', expectedInstance='__
 let state={}, first=true, rendered='', lastTarget='', connected=false, verified=false, lastTransportError=null;
 const correctPage=location.protocol==='http:'&&location.hostname==='127.0.0.1'&&location.origin===expectedOrigin&&token.length>30;
 function controls(){
- for(const id of ['refresh','configure','auto','read','import','upload','exit','pick','region','diagnose','endpoint','model','key','window'])$(id).disabled=!connected;
+ for(const id of ['refresh','configure','auto','read','import','upload','exit','pick','region','diagnose','endpoint','model','key','window','provider','codex-login','codex-check'])$(id).disabled=!connected;
  for(const b of document.querySelectorAll('[data-boundary]'))b.disabled=!connected;
  $('read').disabled=!connected||!!state.busy;$('pick').disabled=!connected||!!state.picking;
+ $('codex-login').disabled=!connected||!!state.codex_busy;$('codex-check').disabled=!connected||!!state.codex_busy;
  if(!connected)$('confirm-region').disabled=true;
 }
 function disconnected(message,details){
@@ -83,18 +86,24 @@ async function poll(){
   $('target').textContent=state.target_label?'当前读取目标：'+state.target_label:'尚未选择读取目标';
   const target=JSON.stringify([state.hwnd,state.region]);if(target!==lastTarget){lastTarget=target;syncTarget();}
   $('run').textContent=(state.pending?'需要确认局次 · ':'')+(state.run_id?'本局 '+state.run_id+' · '+(state.character||'角色待识别'):'无进行中的局次')+(state.sample?' · 截图样本模式':'');
-  if(first){$('endpoint').value=state.endpoint;$('model').value=state.model;if(state.has_key)$('key').placeholder='已从环境加载密钥；留空保留';first=false;}
+  if(first){$('provider').value=state.provider||'codex';showProvider();$('endpoint').value=state.endpoint;$('model').value=state.model;if(state.has_key)$('key').placeholder='已从环境加载密钥；留空保留';first=false;}
+  const loginLabels={unchecked:'尚未检查登录',preparing:'准备中…',installing:'首次安装中…',ready:'已使用 ChatGPT 登录',login_required:'请完成官方登录后检查',not_installed:'尚未安装官方组件',unavailable:'组件或登录未就绪'};
+  $('codex-status').textContent=loginLabels[state.codex_state]||'等待检查';
   if(state.preview){$('preview').src='data:image/jpeg;base64,'+state.preview;$('preview').hidden=false;}else{$('preview').hidden=true;}
-  const signature=JSON.stringify([state.result,state.busy,state.pending,state.has_key]);
+  const signature=JSON.stringify([state.result,state.busy,state.pending,state.analysis_ready,state.provider]);
   if(signature!==rendered){
    rendered=signature;const r=state.result;$('details').replaceChildren();
-   $('advice').textContent=r?r.recommendation:state.busy?'正在分析新画面…':state.pending?'请先确认这属于哪一局。':state.has_key?'等待下一张可分析的画面。':'先预览画面；配置视觉 API 后可获取建议。';
+   $('advice').textContent=r?r.recommendation:state.busy?'正在分析新画面…':state.pending?'请先确认这属于哪一局。':state.analysis_ready?'等待下一张可分析的画面。':state.provider==='codex'?'画面可先预览；完成 ChatGPT 登录后即可分析。':'先预览画面；配置视觉 API 后可获取建议。';
    $('reason').textContent=r?r.reason:'';
    if(r)for(const [heading,field] of [['画面依据','evidence'],['缺失信息','missing'],['其他选项','alternatives'],['攻略引用','guide_refs']]){const h=document.createElement('h3');h.textContent=heading;const ul=document.createElement('ul');for(const text of r[field]){const li=document.createElement('li');li.textContent=text;ul.append(li);}if(!r[field].length){const li=document.createElement('li');li.textContent='暂无';ul.append(li);}$('details').append(h,ul);}
   }
  }catch(e){disconnected(e.message);}
 }
 $('refresh').onclick=refresh;
+function showProvider(){$('codex-settings').hidden=$('provider').value!=='codex';$('api-settings').hidden=$('provider').value!=='api';}
+$('provider').onchange=async()=>{showProvider();await action({action:'provider',provider:$('provider').value});};
+$('codex-login').onclick=()=>action({action:'codex_login'});
+$('codex-check').onclick=()=>action({action:'codex_check'});
 $('pick').onclick=()=>action({action:'pick'});
 $('diagnose').onclick=async()=>{try{$('diagnostics').textContent=JSON.stringify({...await api('/api/diagnostics'),last_transport_error:lastTransportError},null,2);$('diagnostics').hidden=false;}catch(e){$('error').textContent=e.message;}};
 let selection=null, background=null, start=null, rect=null;
@@ -112,7 +121,7 @@ function closeSelection(){selection=null;background=null;rect=null;start=null;ca
 $('cancel-region').onclick=closeSelection;
 $('region-dialog').oncancel=closeSelection;
 $('confirm-region').onclick=async()=>{try{await api('/api/action',{action:'region_select',selection_id:selection.selection_id,rect});closeSelection();await poll();}catch(e){$('crop-error').textContent=e.message;}};
-$('configure').onclick=async()=>{const applied=await action({action:'configure',hwnd:$('window').value,endpoint:$('endpoint').value,model:$('model').value,key:$('key').value});if(applied){$('key').value='';if(state.has_key)$('key').placeholder='本次已配置；留空保留';}};
+$('configure').onclick=async()=>{const applied=await action({action:'configure',provider:$('provider').value,hwnd:$('window').value,endpoint:$('endpoint').value,model:$('model').value,key:$('key').value});if(applied){$('key').value='';if(state.has_key)$('key').placeholder='本次已配置；留空保留';}};
 $('auto').onclick=()=>action({action:'auto',enabled:!state.auto});$('read').onclick=()=>action({action:'read'});
 for(const b of document.querySelectorAll('[data-boundary]'))b.onclick=()=>action({action:b.dataset.boundary});
 $('import').onclick=()=>$('upload').click();

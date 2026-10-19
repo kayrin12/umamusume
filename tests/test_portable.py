@@ -28,6 +28,7 @@ class Portable(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.session = Session(Path(self.tmp.name))
         self.session.key = ''
+        self.session.provider = 'api'
 
     def complete(self):
         deadline = time.monotonic()+3

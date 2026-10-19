@@ -13,6 +13,7 @@ import sys
 from PIL import Image
 
 from . import __version__
+from . import codex_backend
 
 from .capture import (CaptureError, Gate, capture, capture_region, desktop_snapshot,
                       distance, foreground_window, selection_box, windows)
@@ -31,6 +32,10 @@ class Session:
         self.key = os.environ.get('UMACOACH_API_KEY', '')
         self.endpoint = os.environ.get('UMACOACH_API_URL', 'https://api.openai.com/v1')
         self.model = os.environ.get('UMACOACH_MODEL', 'gpt-4.1-mini')
+        self.provider = 'codex'
+        self.codex_ready = False
+        self.codex_busy = False
+        self.codex_state = 'unchecked'
         self.hwnd = None
         self.target_label = ''
         self.region = None
@@ -53,6 +58,8 @@ class Session:
         with self.lock:
             run = self.tracker.active
             return dict(status=self.status, auto=self.auto, busy=self.busy,
+                        provider=self.provider, analysis_ready=self.analysis_ready(),
+                        codex_ready=self.codex_ready, codex_busy=self.codex_busy, codex_state=self.codex_state,
                         has_key=bool(self.key), endpoint=self.endpoint, model=self.model,
                         hwnd=self.hwnd, target_label=self.target_label, region=self.region,
                         picking=bool(self.picker), preview=self.preview, result=self.result,
@@ -63,6 +70,9 @@ class Session:
 
     def configure(self, data):
         with self.lock:
+            provider = data.get('provider', self.provider)
+            if provider not in ('codex', 'api'):
+                raise ValueError('请选择 ChatGPT 账号或视觉 API')
             hwnd = data.get('hwnd')
             if hwnd == 'region':
                 if self.region is None:
@@ -82,6 +92,7 @@ class Session:
             if not endpoint or not model:
                 raise ValueError('请填写 API 地址和模型；尚无密钥也能使用本地预览')
             self.hwnd, self.endpoint, self.model = hwnd, endpoint, model
+            self.provider = provider
             self.region, self.target_label = region, label
             self.picker = None
             if data.get('key', '').strip():
@@ -91,7 +102,65 @@ class Session:
             self.gate = Gate()
             self.frame, self.preview, self.sample = None, '', False
             self.history, self.result = [], None
-            self.status = '配置已应用，密钥仅保留在本机进程内存。'
+            self.status = '配置已应用。'+('ChatGPT 账号模式，请完成官方登录并检查状态。' if provider == 'codex' and not self.codex_ready else '可以开始读取画面。')
+
+    def analysis_ready(self):
+        return self.codex_ready if self.provider == 'codex' else bool(self.key)
+
+    def set_provider(self, provider):
+        if provider not in ('codex', 'api'):
+            raise ValueError('请选择支持的分析方式')
+        with self.lock:
+            self.provider = provider
+            self.auto = False
+            self.epoch += 1
+            self.result, self.history = None, []
+            self.status = '已切换为'+('ChatGPT 账号（Codex 额度）' if provider == 'codex' else '视觉 API')+'模式。'
+
+    def check_codex(self):
+        state = codex_backend.login_status()
+        with self.lock:
+            self.codex_state = state
+            self.codex_ready = state == 'ready'
+            self.status = {'ready': 'ChatGPT 登录已确认，将使用账号 Codex 额度分析画面。',
+                           'not_installed': '尚未安装 Codex 组件，请点“使用 ChatGPT 登录”；首次自动下载约162MB。',
+                           'login_required': '尚未确认 ChatGPT 登录，请完成官方登录后再检查。',
+                           'unavailable': 'Codex 组件未能响应，请重试或重新启动助手。'}[state]
+
+    def login_codex(self):
+        with self.lock:
+            if self.codex_busy:
+                raise ValueError('正在准备登录，请稍候')
+            self.auto = False
+            self.epoch += 1
+            self.result = None
+            self.codex_busy, self.codex_ready = True, False
+            self.codex_state = 'preparing'
+            self.status = '正在准备官方 Codex 组件与 ChatGPT 登录…'
+        def progress(message):
+            with self.lock:
+                self.status = message
+                self.codex_state = 'installing'
+        def work():
+            try:
+                if not codex_backend.binary():
+                    codex_backend.install(progress)
+                codex_backend.open_login()
+                with self.lock:
+                    self.codex_state = 'login_required'
+                    self.status = '官方登录窗口已打开。完成 ChatGPT 登录后，回到此处点“检查登录状态”。'
+            except codex_backend.CodexError as error:
+                with self.lock:
+                    self.codex_state = 'unavailable'
+                    self.status = str(error)
+            except Exception:
+                with self.lock:
+                    self.codex_state = 'unavailable'
+                    self.status = 'Codex 组件准备或登录启动失败，请检查网络、磁盘空间后重试。'
+            finally:
+                with self.lock:
+                    self.codex_busy = False
+        threading.Thread(target=work, daemon=True).start()
 
     def read_frame(self):
         return capture_region(self.region) if self.region is not None else capture(self.hwnd)
@@ -173,6 +242,7 @@ class Session:
     def diagnostics(self):
         with self.lock:
             data = dict(app_version=__version__, platform=sys.platform, python=sys.version.split()[0],
+                        provider=self.provider, codex_state=self.codex_state, analysis_ready=self.analysis_ready(),
                         pointer_bits=struct.calcsize('P')*8, hwnd=self.hwnd,
                         capture_mode='region' if self.region is not None else 'window',
                         last_capture_error=self.capture_error)
@@ -227,7 +297,7 @@ class Session:
             self.result = None
             self.set_frame(frame)
             self.status = '样本已载入；样本分析不会修改真实局次。'
-            if self.key:
+            if self.analysis_ready():
                 self.submit(frame, True)
 
     def read_now(self):
@@ -248,9 +318,9 @@ class Session:
                     self.result = None
                     raise
                 self.set_frame(frame)
-            if not self.key:
+            if not self.analysis_ready():
                 self.result = None
-                self.status = '已读取画面，仅在本机预览。填写视觉 API 密钥后才能给出建议。'
+                self.status = '画面预览正常。'+('请点“使用 ChatGPT 登录”，完成后检查登录状态，即可获取建议。' if self.provider == 'codex' else '请填写视觉 API 密钥以获取建议。')
                 return
             self.submit(frame, self.sample)
 
@@ -264,7 +334,7 @@ class Session:
             self.result = None
             if enabled:
                 self.sample = False
-            self.status = ('正在读取可见游戏窗口。' if self.key else '正在本地预览；尚未配置 API，不会上传画面。') if enabled else '已暂停读取。'
+            self.status = ('正在读取可见游戏窗口并等待分析。' if self.analysis_ready() else '正在本地预览；请完成 ChatGPT 登录或配置 API 后再分析。') if enabled else ('已暂停读取；正在进行的分析可能仍消耗额度。' if self.busy else '已暂停读取。')
 
     def tick(self):
         with self.lock:
@@ -274,7 +344,8 @@ class Session:
                 frame = self.read_frame()
                 self.set_frame(frame)
                 ready = self.gate.ready(frame, time.monotonic())
-                if ready and not self.busy and self.key and time.monotonic()-self.requested_at >= 8:
+                interval = 30 if self.provider == 'codex' else 8
+                if ready and not self.busy and self.analysis_ready() and time.monotonic()-self.requested_at >= interval:
                     self.submit(frame, False)
             except CaptureError as error:
                 self.auto = False
@@ -294,6 +365,7 @@ class Session:
         self.busy = True
         self.requested_at = time.monotonic()
         epoch, endpoint, key, model = self.epoch, self.endpoint, self.key, self.model
+        provider = self.provider
         run = self.tracker.active
         context = {} if sample else dict(run_id=run.id if run else None,
                                         pending_boundary=self.tracker.pending,
@@ -303,7 +375,10 @@ class Session:
 
         def work():
             try:
-                result = analyze(frame, endpoint, key, model, context, ROOT/'guides/legendary_tw.md')
+                if provider == 'codex':
+                    result = codex_backend.analyze_codex(frame, context, ROOT/'guides/legendary_tw.md')
+                else:
+                    result = analyze(frame, endpoint, key, model, context, ROOT/'guides/legendary_tw.md')
                 with self.lock:
                     if epoch != self.epoch:
                         return
@@ -328,13 +403,21 @@ class Session:
                         self.result = result
                     elif result['confidence'] < .85:
                         self.status = '画面识别不确定，暂不显示建议；请等画面稳定后重新读取。'
+            except codex_backend.CodexError as error:
+                with self.lock:
+                    if epoch == self.epoch:
+                        self.auto, self.result = False, None
+                        self.status = str(error)
+                        if error.reason == 'login':
+                            self.codex_ready = False
+                            self.codex_state = 'login_required'
             except Exception:
                 with self.lock:
                     if epoch == self.epoch:
                         self.auto = False
                         self.result = None
                         # Neither API errors nor logs expose entered keys or request data.
-                        self.status = '分析失败，已暂停。请检查 API 地址、模型、密钥、配额和网络后重试。'
+                        self.status = ('Codex 分析失败，已暂停。请检查组件、ChatGPT 登录和网络后重试。' if provider == 'codex' else '分析失败，已暂停。请检查 API 地址、模型、密钥、配额和网络后重试。')
             finally:
                 with self.lock:
                     self.busy = False

@@ -3,6 +3,7 @@
 Run on the Linux builder with Python, OpenSSL and network access. No Wine needed.
 """
 import base64
+import ast
 import gzip
 import hashlib
 import json
@@ -37,6 +38,39 @@ def safe_name(name):
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    # Verify the pinned official CLI package metadata signature before shipping
+    # an installer that downloads that exact hash on the user's Windows PC.
+    tree = ast.parse((ROOT/'umacoach/codex_backend.py').read_text('utf-8'))
+    constants = {node.targets[0].id: ast.literal_eval(node.value) for node in tree.body
+                 if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+                 and node.targets[0].id in ('VERSION', 'PACKAGE_SHA512')}
+    cli = json.loads(fetch(f'https://registry.npmjs.org/@openai/codex/{constants["VERSION"]}-win32-x64'))
+    if cli['name'] != '@openai/codex' or cli['dist']['integrity'] != 'sha512-'+constants['PACKAGE_SHA512']:
+        raise ValueError('Unexpected pinned Codex package identity or hash')
+    keys = json.loads(fetch('https://registry.npmjs.org/-/npm/v1/keys'))['keys']
+    message = f'{cli["name"]}@{cli["version"]}:{cli["dist"]["integrity"]}'
+    (CACHE/'npm-signature-message').write_text(message, 'utf-8')
+    verified = False
+    for signature in cli['dist']['signatures']:
+        key = next((key for key in keys if key['keyid'] == signature['keyid']), None)
+        if not key:
+            continue
+        encoded = key['key']
+        pem = '-----BEGIN PUBLIC KEY-----\n'+'\n'.join(encoded[n:n+64] for n in range(0, len(encoded), 64))+'\n-----END PUBLIC KEY-----\n'
+        (CACHE/'npm-key.pem').write_text(pem, 'utf-8')
+        (CACHE/'npm-signature.bin').write_bytes(base64.b64decode(signature['sig'], validate=True))
+        result = subprocess.run(['openssl', 'dgst', '-sha256', '-verify', str(CACHE/'npm-key.pem'),
+                                 '-signature', str(CACHE/'npm-signature.bin'), str(CACHE/'npm-signature-message')], capture_output=True)
+        if result.returncode == 0:
+            verified = True
+            break
+    if not verified:
+        raise ValueError('Codex npm registry signature verification failed')
+    (ROOT/'umacoach/codex_provenance.json').write_text(json.dumps(dict(name=cli['name'], version=cli['version'],
+        url=cli['dist']['tarball'], integrity=cli['dist']['integrity'], signature_keyid=signature['keyid'],
+        npm_ecdsa_signature_verified=True), indent=2), 'utf-8')
+    (ROOT/'umacoach/CODEX_LICENSE.txt').write_bytes(fetch(f'https://raw.githubusercontent.com/openai/codex/rust-v{constants["VERSION"]}/LICENSE'))
+    print('Official Codex package signature verified; first-use installer hash pinned.')
     registration = json.loads(fetch(f'https://api.nuget.org/v3/registration5-gz-semver2/python/{PYTHON}.json'))
     catalog = json.loads(fetch(registration['catalogEntry']))
     if catalog['authors'] != 'Python Software Foundation' or catalog['version'] != PYTHON:
