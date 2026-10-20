@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "notice": "程序启发式，不是游戏评价分公式。目标和上限未知时留null；J01/J02仅作跨服推定参考，不把这些权重当原文公式。",
+  "phases": {
+    "early": {"stat_weights": [1,1,1,1,1], "targets": [null,null,null,null,null], "skill_weight": 0.55, "bond_weight": 4},
+    "classic": {"stat_weights": [1,1,1,1,1], "targets": [null,null,null,null,null], "skill_weight": 1.5, "bond_weight": 2},
+    "senior": {"stat_weights": [1,1,1,1,1], "targets": [null,null,null,null,null], "skill_weight": 1.6, "bond_weight": 1}
+  },
+  "attribute_caps": [null,null,null,null,null],
+  "target_deficit_weight": 0.5,
+  "friendship_weight": 1.5,
+  "participants_weight": 0.3,
+  "hint_weight": 1,
+  "guide_step_weight": 0.8,
+  "guide_full_bonus": 5,
+  "pink_route_bonus": 2,
+  "late_pink_green_bonus": 1,
+  "failure_expected_loss": 80,
+  "summer_multiplier": 1.1,
+  "rest_below_percent": 20,
+  "rest_priority": 60,
+  "outing_below_mood": "不調",
+  "outing_priority": 65,
+  "infirmary_priority": 100
+}

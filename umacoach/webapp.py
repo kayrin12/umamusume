@@ -2,6 +2,7 @@
 import argparse
 import base64
 from io import BytesIO
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -18,6 +19,7 @@ from .session import ROOT, Session, ActionError
 from .run_state import StateError
 from .local_coach import LocalError
 from .schedule import profile_options
+from .templates import FIELDS,TemplateError
 
 
 class Server(ThreadingHTTPServer):
@@ -85,6 +87,12 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, self.server.session.snapshot())
         elif self.path == '/api/local_catalog':
             self.reply(200, profile_options())
+        elif self.path == '/api/template_fields':
+            self.reply(200, FIELDS)
+        elif self.path == '/api/weights':
+            self.reply(200, self.server.session.local_coach.weights.config)
+        elif self.path == '/api/template_samples':
+            self.reply(200, self.server.session.local_coach.fast.bank.data['samples'])
         elif self.path == '/api/windows':
             try:
                 self.reply(200, [{'hwnd': h, 'title': title} for h, title in windows()])
@@ -122,6 +130,40 @@ class Handler(BaseHTTPRequestHandler):
             elif action == 'local_settings':
                 with session.lock:
                     session.local_coach.configure(data['values'])
+            elif action == 'weights_save':
+                with session.lock:
+                    try:session.local_coach.weights.save(data['config'])
+                    except (ValueError,TypeError,KeyError):raise LocalError('评分配置不完整或含无效值，请核对JSON字段和范围') from None
+            elif action == 'template_prepare':
+                with session.lock:
+                    if session.hwnd is None and session.region is None:raise TemplateError('请先选择游戏窗口')
+                    session.toggle(False);pic=session.read_frame().convert('RGB')
+                    token=secrets.token_hex(16);session.template_capture=dict(token=token,image=pic,expires=time.monotonic()+300)
+                    preview=pic.copy();preview.thumbnail((1100,1400));buf=BytesIO();preview.save(buf,'JPEG',quality=92)
+                    self.reply(200,dict(token=token,image=base64.b64encode(buf.getvalue()).decode()))
+                    return
+            elif action == 'template_add':
+                with session.lock:
+                    capture=session.template_capture
+                    if not capture or data.get('token')!=capture['token'] or time.monotonic()>capture['expires']:raise TemplateError('样本画面已过期，请重新采集')
+                    with session.local_coach.fast.lock:
+                        session.local_coach.fast.bank.add(capture['image'],data['field'],data['rect'],data.get('label',''),data.get('mode','auto'),data.get('sample_type','number'))
+                    session.epoch+=1;session.local_coach.stable.previous={}
+                    if session.tracker.active:session.tracker.active.local['training']={}
+            elif action == 'template_cancel':
+                session.template_capture=None
+            elif action == 'template_remove':
+                with session.lock,session.local_coach.fast.lock:
+                    session.local_coach.fast.bank.remove(data['file'])
+                    session.epoch+=1
+            elif action == 'template_override':
+                with session.lock:
+                    if session.frame is None:raise TemplateError('请先读取当前游戏画面')
+                    with session.local_coach.fast.lock:
+                        session.local_coach.fast.bank.override(session.frame,data['field'],data['value'],data['expected_hash'])
+                    session.epoch+=1;session.local_coach.fast.repeat_count=0;session.local_coach.stable.previous={}
+                    session.local_coach.fast.submit(session.frame.copy(),True)
+                    session.local_coach.fast.submit(session.frame.copy(),True)
             elif action == 'local_manual':
                 with session.lock:
                     run=session.tracker.active
@@ -163,7 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 raise ValueError('未知操作')
             self.reply(200, {'ok': True})
-        except (CaptureError, StateError, ActionError, LocalError) as error:
+        except (CaptureError, StateError, ActionError, LocalError, TemplateError) as error:
             self.reply(400, {'error': str(error)})
         except (ValueError, KeyError, TypeError):
             self.reply(400, {'error': '操作未完成，请检查窗口选择、配置或图片；如果正在分析，请稍候。'})
@@ -196,7 +238,7 @@ def main():
     session = Session(Path(os.environ.get('UMACOACH_DATA_DIR', ROOT/'local-data')))
     stop = threading.Event()
     def sample_loop():
-        while not stop.wait(.5):
+        while not stop.wait(.1):
             session.tick()
     threading.Thread(target=sample_loop, daemon=True).start()
     with Server(('127.0.0.1', 0), session) as server:

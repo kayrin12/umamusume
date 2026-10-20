@@ -55,6 +55,8 @@ class Session:
         self.gate = Gate()
         self.requested_at = float('-inf')
         self.frame = None
+        self.previewed_at = 0
+        self.template_capture = None
         self.preview = ''
         self.sample = False
         self.history = []
@@ -315,6 +317,8 @@ class Session:
 
     def set_frame(self, frame):
         self.frame = frame.copy()
+        if self.preview and time.monotonic()-self.previewed_at<.25:return
+        self.previewed_at=time.monotonic()
         thumb = frame.convert('RGB')
         thumb.thumbnail((420, 640))
         out = BytesIO()
@@ -441,7 +445,7 @@ class Session:
                         return
                     self.gate.mark(frame, time.monotonic())
                     active = self.tracker.active
-                    if (active and active.local.get('date',{}).get('source') == 'local_ocr_twice'
+                    if (active and active.local.get('date',{}).get('source') in ('local_ocr_twice','self_templates')
                             and result.get('turn_index') is not None and active.last_turn is not None
                             and result['turn_index'] < active.last_turn and not self.tracker.pending):
                         self.status = '模型结果来自更早回合，已丢弃；继续使用当前本地记录。'

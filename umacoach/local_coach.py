@@ -7,6 +7,8 @@ import time
 from .local_ocr import DEFAULT_REGIONS, OcrError, StableReadings, WindowsOcr, parse_result
 from .training import ranking, validate_preview
 from .schedule import alerts, find_profile
+from .fast_channel import FastChannel
+from .scoring import Weights
 
 
 class LocalError(ValueError):
@@ -25,7 +27,7 @@ class LocalCoach:
     def __init__(self,session):
         self.session=session
         self.path=session.data_dir/'local_settings.json'
-        self.settings=dict(enabled=sys.platform=='win32',regions=deepcopy(DEFAULT_REGIONS),preview_complete=False,risk_limit=15)
+        self.settings=dict(enabled=sys.platform=='win32',regions=deepcopy(DEFAULT_REGIONS),preview_complete=False,risk_limit=15,backend='templates' if sys.platform=='win32' else 'ocr')
         if self.path.exists():
             try:self.configure_values(json.loads(self.path.read_text('utf-8')))
             except (ValueError,TypeError,KeyError):pass
@@ -41,9 +43,12 @@ class LocalCoach:
         self.elapsed_ms=None
         self.event_key=None
         self.generation=0
+        self.fast=FastChannel(self)
+        self.weights=Weights(session.data_dir/'training_weights.json')
 
     def configure_values(self,values):
         if not isinstance(values,dict) or set(values)-set(self.settings):raise LocalError('本地设置字段无效')
+        if 'backend' in values and values['backend'] not in ('templates','ocr'):raise LocalError('本地后端无效')
         if 'enabled' in values and type(values['enabled']) is not bool:raise LocalError('启用状态无效')
         if 'preview_complete' in values and type(values['preview_complete']) is not bool:raise LocalError('完整选区状态无效')
         if 'risk_limit' in values and (type(values['risk_limit']) is not int or not 0<=values['risk_limit']<=50):raise LocalError('失败率上限应为0到50')
@@ -127,6 +132,7 @@ class LocalCoach:
         self.generation+=1;self.stable=StableReadings()
         if 'preview' in values or 'calendar_index' in values:
             self.live_scene='training';self.live_date=date_key(local.get('date',{}))
+        if 'calendar_index' in values:self.fast.set_manual_date(self.session.frame,local['date'])
         self.message='本局快速数据已保存；切换预览可继续自动读取'
 
     def snapshot(self):
@@ -139,15 +145,19 @@ class LocalCoach:
             number=local['anchor']['turn_number']+idx-local['anchor']['calendar_index']
         usable=bool(run and not self.session.tracker.pending and not self.session.sample and self.live_scene=='training' and self.live_date==date_key(date) and date_key(date) is not None)
         cache=local.get('training',{}) if run and local.get('cache_signature')==signature(run.state) else {}
-        ranked=ranking(cache,run.state,idx,self.settings['risk_limit']) if usable else None
+        live=self.fast.live if self.settings['backend']=='templates' and date_key(self.fast.live.get('date',{}))==date_key(date) else {}
+        ranked=ranking(cache,run.state,idx,self.settings['risk_limit'],config=self.weights.config,live=live) if usable else None
         schedule=alerts(run) if run else None
         if ranked and schedule['urgent']:ranked['recommendation']='先处理粉丝门槛，再决定训练。'+ranked['recommendation']
-        return dict(settings=deepcopy(self.settings),busy=self.busy,message=self.message,elapsed_ms=self.elapsed_ms,
+        return dict(fast=self.fast.snapshot(),weights_error=self.weights.error,settings=deepcopy(self.settings),busy=self.busy or self.fast.busy,message=self.message,elapsed_ms=self.elapsed_ms,
             scene=self.live_scene,date=date,turn_number=number,character_locked=run.character_locked if run else False,
             fans=run.state.get('fans') if run else None,profile_id=local.get('profile_id'),goals=local.get('goals',[]),
             training=ranked,schedule=schedule)
 
     def submit(self,frame,force=False):
+        if self.settings['backend']=='templates':
+            self.fast.submit(frame,force)
+            return
         if self.busy:return
         now=time.monotonic()
         if not force and (now-self.last_at<.65 or now<self.error_until):return
@@ -163,11 +173,7 @@ class LocalCoach:
                     if epoch!=self.session.epoch or generation!=self.generation:return
                     self.elapsed_ms=parsed['elapsed_ms']
                     self._apply(parsed)
-                    irregular=parsed['scene'] in ('event','race','result','abandon_dialog','abandon_confirmed','run_start')
-                    if not irregular:self.event_key=None
-                    if (irregular and parsed['event_text']!=self.event_key and self.session.auto and not self.session.busy and self.session.analysis_ready()
-                            and (not self.session.tracker.pending or parsed['scene']=='run_start') and time.monotonic()-self.session.requested_at>=30):
-                        self.event_key=parsed['event_text'];self.session.submit(frame,False)
+                    self.route_irregular(parsed,frame)
             except OcrError as error:
                 with self.session.lock:
                     if epoch==self.session.epoch:
@@ -182,12 +188,19 @@ class LocalCoach:
                 with self.session.lock:self.busy=False
         threading.Thread(target=work,daemon=True).start()
 
+    def route_irregular(self,parsed,frame):
+        irregular=parsed['scene'] in ('event','race','result','abandon_dialog','abandon_confirmed','run_start','skills')
+        if not irregular:self.event_key=None
+        if (irregular and parsed['event_text']!=self.event_key and self.session.auto and not self.session.busy and self.session.analysis_ready()
+                and (not self.session.tracker.pending or parsed['scene']=='run_start') and time.monotonic()-self.session.requested_at>=30):
+            self.event_key=parsed['event_text'];self.session.submit(frame,False)
+
     def _apply(self,p):
         self.live_scene=p['scene'];self.live_date=None
         run=self.session.tracker.active
         confirmed=self.stable.confirm(dict(date=p['date'] if date_key(p['date']) is not None else None,
-            preview=dict(kind=p['kind'],gains=p['gains'],failure=p['failure']) if p['kind'] and p['gains'] is not None and p['failure'] is not None else None,
-            fans=p['fans'],energy=p['energy'],mood=p['mood'],attributes=p['attributes'],goal=dict(text=p['goal_text'],required=p['goal_required']) if p['goal_required'] is not None else None))
+            preview=dict(kind=p['kind'],gains=p['gains'],failure=p['failure'])|p.get('extras',{}) if p['kind'] and p['gains'] is not None and p['failure'] is not None else None,
+            fans=p['fans'],energy=p['energy'],mood=p['mood'],attributes=p['attributes'],guide_gauges=p.get('guide_gauges'),goal=dict(text=p['goal_text'],required=p['goal_required']) if p['goal_required'] is not None else None))
         if not run or self.session.tracker.pending or self.session.sample:
             self.message='已读取本地文字；请先用“记录为新局”或“继续当前局”确认归属'
             return
@@ -206,15 +219,17 @@ class LocalCoach:
             self.session.tracker.pending=True;local['training']={};self.session.result=None
             self.session.tracker.save();self.message='粉丝数倒退，可能重开或OCR异常；请确认局次及粉丝，暂停本地建议';return
         if date_key(local.get('date',{}))!=date_key(date):local['training']={}
-        local['date']=date|dict(source='local_ocr_twice')
+        local['date']=date|dict(source=p.get('source','local_ocr_twice'))
         if idx is not None:run.last_turn=idx
         self.live_date=date_key(date)
         if 'fans' in confirmed:run.state['fans']=confirmed['fans']
         for key in ('energy','mood','attributes'):
             if key in confirmed:run.state[key]=confirmed[key]
+        if 'guide_gauges' in confirmed:
+            run.state['guide_gauges'].update({k:v for k,v in confirmed['guide_gauges'].items() if v is not None})
         for key in ('fans','energy','mood','attributes'):
-            if key in confirmed:run.state['evidence'][key]=dict(source='local_ocr_twice',confidence=None,
-                evidence='连续两次OCR一致（非OCR置信度）',turn_index=idx,date_text=date['date_text'],updated_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
+            if key in confirmed:run.state['evidence'][key]=dict(source=p.get('source','local_ocr_twice'),confidence=None,
+                evidence='自采模板匹配；日期可能由本地OCR补充，相似度非概率' if p.get('source')=='self_templates' else '连续两次OCR一致（非OCR置信度）',turn_index=idx,date_text=date['date_text'],updated_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
         context=signature(run.state)
         if local.get('cache_signature')!=context:local['training']={};local['cache_signature']=context
         if p['scene'] not in ('training','unknown'):local['training']={}
@@ -224,7 +239,7 @@ class LocalCoach:
                 self.message='日期已识别；训练收益不完整，请校准含六列标题的完整收益区域，或快速录入'
             else:
                 # Do not attach previous-screen confirmation to a newly changed date.
-                local.setdefault('training',{})[preview['kind']]=dict(preview=preview,at=time.time(),source='local_ocr_twice')
+                local.setdefault('training',{})[preview['kind']]=dict(preview=preview,at=time.time(),source=p.get('source','local_ocr_twice'))
                 self.message='本回合训练已自动缓存；继续切换其他预览即可，无需逐项点读取'
         else:self.message='日期已识别；训练名称/收益待校准。也可用快速录入，不必等待模型'
         if idx is not None and 'goal' in confirmed and date.get('remaining') is not None:

@@ -267,6 +267,27 @@ class HTTP(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as caught:self.request('/api/action',payload)
         self.assertIn('目标记录已变化',json.load(caught.exception)['error'])
 
+    def test_template_collection_is_local_and_requires_valid_capture_token(self):
+        self.server.session.hwnd=123
+        with patch('umacoach.session.capture',return_value=Image.new('RGB',(100,100),'green')):
+            with self.request('/api/action',dict(action='template_prepare')) as r:
+                capture=json.load(r)
+        self.assertTrue(capture['image']);self.assertTrue(capture['token'])
+        body=dict(action='template_add',token=capture['token'],field='gain_speed',rect=[0,0,1,1],sample_type='region',label='')
+        with self.request('/api/action',body):pass
+        self.assertIn('gain_speed',self.server.session.local_coach.fast.bank.data['regions'])
+        with self.assertRaises(urllib.error.HTTPError):self.request('/api/action',body|dict(token='wrong'))
+        with self.request('/api/action',dict(action='template_cancel')):pass
+        self.assertIsNone(self.server.session.template_capture)
+
+    def test_weights_http_edit_validates_and_persists_configuration(self):
+        with self.request('/api/weights') as r:config=json.load(r)
+        config['failure_expected_loss']=123
+        with self.request('/api/action',dict(action='weights_save',config=config)):pass
+        self.assertEqual(self.server.session.local_coach.weights.config['failure_expected_loss'],123)
+        self.assertTrue((Path(self.tmp.name)/'training_weights.json').exists())
+        with self.assertRaises(urllib.error.HTTPError):self.request('/api/action',dict(action='weights_save',config={}))
+
     def test_unsupported_request_returns_json_instead_of_html(self):
         req = urllib.request.Request(self.server.origin+'/', method='PUT')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

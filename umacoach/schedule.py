@@ -1,8 +1,10 @@
 """Incomplete sourced schedules never imply that a run is safe to continue."""
 import json
 from pathlib import Path
+from functools import lru_cache
 
 
+@lru_cache(maxsize=1)
 def catalog():
     return json.loads((Path(__file__).resolve().parents[1]/'guides/character_goals.json').read_text('utf-8'))
 
