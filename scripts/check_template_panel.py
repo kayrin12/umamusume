@@ -27,7 +27,7 @@ def main():
                     if executable:opts['executable_path']=executable
                     browser=p.chromium.launch(**opts);page=browser.new_page(viewport={'width':1500,'height':1200});errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
                     page.goto(server.origin);page.locator('#window').select_option('123');page.get_by_role('button',name='记录为新局',exact=True).click()
-                    page.locator('#fast-backend').select_option('templates');page.locator('#fast-backend-save').click();page.locator('#auto').click()
+                    page.locator('#advanced-vision > summary').click();page.locator('#fast-backend').select_option('templates');page.locator('#fast-backend-save').click();page.locator('#auto').click()
                     expect(page.locator('#local-ranking')).to_contain_text('速度：',timeout=10000)
                     expect(page.locator('#fast-cards')).to_contain_text('卡槽1：A')
                     expect(page.locator('#template-performance')).to_contain_text('300 ms目标')

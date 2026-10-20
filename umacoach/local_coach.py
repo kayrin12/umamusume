@@ -9,6 +9,7 @@ from .training import ranking, validate_preview
 from .schedule import alerts, find_profile
 from .fast_channel import FastChannel
 from .scoring import Weights
+from .automatic import AutomaticChannel
 
 
 class LocalError(ValueError):
@@ -27,7 +28,7 @@ class LocalCoach:
     def __init__(self,session):
         self.session=session
         self.path=session.data_dir/'local_settings.json'
-        self.settings=dict(enabled=sys.platform=='win32',regions=deepcopy(DEFAULT_REGIONS),preview_complete=False,risk_limit=15,backend='templates' if sys.platform=='win32' else 'ocr')
+        self.settings=dict(enabled=sys.platform=='win32',regions=deepcopy(DEFAULT_REGIONS),preview_complete=False,risk_limit=15,backend='auto' if sys.platform=='win32' else 'ocr')
         if self.path.exists():
             try:self.configure_values(json.loads(self.path.read_text('utf-8')))
             except (ValueError,TypeError,KeyError):pass
@@ -45,10 +46,11 @@ class LocalCoach:
         self.generation=0
         self.fast=FastChannel(self)
         self.weights=Weights(session.data_dir/'training_weights.json')
+        self.automatic=AutomaticChannel(self)
 
     def configure_values(self,values):
         if not isinstance(values,dict) or set(values)-set(self.settings):raise LocalError('本地设置字段无效')
-        if 'backend' in values and values['backend'] not in ('templates','ocr'):raise LocalError('本地后端无效')
+        if 'backend' in values and values['backend'] not in ('auto','templates','ocr'):raise LocalError('本地后端无效')
         if 'enabled' in values and type(values['enabled']) is not bool:raise LocalError('启用状态无效')
         if 'preview_complete' in values and type(values['preview_complete']) is not bool:raise LocalError('完整选区状态无效')
         if 'risk_limit' in values and (type(values['risk_limit']) is not int or not 0<=values['risk_limit']<=50):raise LocalError('失败率上限应为0到50')
@@ -149,12 +151,15 @@ class LocalCoach:
         ranked=ranking(cache,run.state,idx,self.settings['risk_limit'],config=self.weights.config,live=live) if usable else None
         schedule=alerts(run) if run else None
         if ranked and schedule['urgent']:ranked['recommendation']='先处理粉丝门槛，再决定训练。'+ranked['recommendation']
-        return dict(fast=self.fast.snapshot(),weights_error=self.weights.error,settings=deepcopy(self.settings),busy=self.busy or self.fast.busy,message=self.message,elapsed_ms=self.elapsed_ms,
+        return dict(automatic=self.automatic.snapshot(),fast=self.fast.snapshot(),weights_error=self.weights.error,settings=deepcopy(self.settings),busy=self.busy or self.fast.busy or self.automatic.busy,message=self.message,elapsed_ms=self.elapsed_ms,
             scene=self.live_scene,date=date,turn_number=number,character_locked=run.character_locked if run else False,
             fans=run.state.get('fans') if run else None,profile_id=local.get('profile_id'),goals=local.get('goals',[]),
             training=ranked,schedule=schedule)
 
     def submit(self,frame,force=False):
+        if self.settings['backend']=='auto':
+            self.automatic.submit(frame,force)
+            return
         if self.settings['backend']=='templates':
             self.fast.submit(frame,force)
             return
@@ -229,7 +234,7 @@ class LocalCoach:
             run.state['guide_gauges'].update({k:v for k,v in confirmed['guide_gauges'].items() if v is not None})
         for key in ('fans','energy','mood','attributes'):
             if key in confirmed:run.state['evidence'][key]=dict(source=p.get('source','local_ocr_twice'),confidence=None,
-                evidence='自采模板匹配；日期可能由本地OCR补充，相似度非概率' if p.get('source')=='self_templates' else '连续两次OCR一致（非OCR置信度）',turn_index=idx,date_text=date['date_text'],updated_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
+                evidence='本地OCR自动定位，连续画面一致；像素缓存不代表独立OCR置信度' if p.get('source')=='automatic_ocr' else '自采模板匹配；日期可能由本地OCR补充，相似度非概率' if p.get('source')=='self_templates' else '连续两次OCR一致（非OCR置信度）',turn_index=idx,date_text=date['date_text'],updated_at=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()))
         context=signature(run.state)
         if local.get('cache_signature')!=context:local['training']={};local['cache_signature']=context
         if p['scene'] not in ('training','unknown'):local['training']={}

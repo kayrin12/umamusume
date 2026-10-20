@@ -51,7 +51,7 @@ def main():
                 expect(page.locator('#target')).to_contain_text('点击读取将自动应用')
                 page.locator('#refresh').click()
                 expect(page.locator('#window')).to_have_value('123')
-                page.locator('#provider').select_option('api')
+                page.locator('#ai-settings > summary').click();page.locator('#provider').select_option('api')
                 page.locator('#endpoint').fill('');page.locator('#model').fill('')
                 page.locator('#provider').select_option('codex')
                 page.locator('#read').click()

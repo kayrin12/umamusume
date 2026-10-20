@@ -193,6 +193,18 @@ class Handler(BaseHTTPRequestHandler):
                 session.boundary(action)
             elif action == 'state_correct':
                 session.correct_state(data['run_id'], data['revision'], data['values'])
+            elif action == 'start_assistant':
+                with session.lock:
+                    if 'hwnd' in data:
+                        if not data['hwnd']:raise LocalError('请先选择游戏窗口')
+                        # Local start uses only the target selection, independent
+                        # of incomplete/unsubmitted optional AI form fields.
+                        session.configure(dict(hwnd=data['hwnd']))
+                    if session.hwnd is None and session.region is None:raise LocalError('请先选择游戏窗口')
+                    session.local_coach.configure(dict(enabled=True,backend='auto'))
+                    session.local_coach.automatic.allow_attach=session.tracker.active is None
+                    session.toggle(True)
+                    session.status='自动辅助已开始；在游戏中浏览训练即可，不需采样、框选或登录。'
             elif action == 'auto':
                 if type(data.get('enabled')) is not bool:
                     raise ValueError('缺少读取状态')

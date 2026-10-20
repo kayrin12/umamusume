@@ -40,7 +40,7 @@ def main():
                     browser=p.chromium.launch(**options);page=browser.new_page(viewport={'width':1400,'height':1100});errors=[]
                     page.on('pageerror',lambda e:errors.append(str(e)));page.goto(server.origin)
                     page.locator('#window').select_option('123');page.get_by_role('button',name='记录为新局',exact=True).click()
-                    page.locator('#local-enabled').check();page.locator('#local-save-settings').click()
+                    page.locator('#local-settings > summary').click();page.locator('#local-enabled').check();page.locator('#local-save-settings').click()
                     page.get_by_text('固定本局角色与日期 / 粉丝快速修正',exact=True).click()
                     page.locator('#local-character').locator('option').filter(has_text='貴婦人').first.wait_for(state='attached')
                     profile=next(x for x in catalog()['profiles'] if x['name']=='貴婦人')
@@ -77,7 +77,7 @@ def main():
                     page.locator('#ocr-set').click();expect(page.locator('#ocr-error')).to_contain_text('已保存')
                     page.locator('#ocr-close').click();assert session.local_coach.path.exists()
                     page.get_by_role('button',name='记录为新局',exact=True).click()
-                    expect(page.locator('#local-date')).to_contain_text('请固定本局角色')
+                    expect(page.locator('#local-date')).to_contain_text('角色尚未识别')
                     assert session.tracker.active.local=={};assert not session.tracker.active.character_locked
                     assert not errors,errors
                     browser.close()

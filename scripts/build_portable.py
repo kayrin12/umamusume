@@ -137,7 +137,7 @@ def main():
                              'umacoach/local_ocr.py', 'umacoach/ocr_windows.ps1',
                              'umacoach/training.py', 'guides/character_goals.json',
                              'umacoach/templates.py', 'umacoach/fast_channel.py',
-                             'umacoach/scoring.py', 'guides/training_weights.json',
+                             'umacoach/scoring.py', 'guides/training_weights.json', 'umacoach/automatic.py',
                              '.runtime/python/python.exe', '.runtime/python/vcruntime140.dll',
                              '.runtime/python/Lib/site-packages/PIL/_imaging.cp313-win_amd64.pyd'):
                 if prefix+required not in names:

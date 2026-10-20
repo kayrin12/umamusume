@@ -288,6 +288,15 @@ class HTTP(unittest.TestCase):
         self.assertTrue((Path(self.tmp.name)/'training_weights.json').exists())
         with self.assertRaises(urllib.error.HTTPError):self.request('/api/action',dict(action='weights_save',config={}))
 
+    def test_one_local_start_sets_target_and_needs_no_ai_or_templates(self):
+        with patch('umacoach.session.windows',return_value=[(123,'賽馬娘')]):
+            with self.request('/api/action',dict(action='start_assistant',hwnd='123')):pass
+        session=self.server.session
+        self.assertEqual(session.hwnd,123);self.assertTrue(session.auto)
+        self.assertTrue(session.local_coach.settings['enabled'])
+        self.assertEqual(session.local_coach.settings['backend'],'auto')
+        self.assertFalse(session.analysis_ready());self.assertFalse(session.local_coach.fast.bank.data['samples'])
+
     def test_unsupported_request_returns_json_instead_of_html(self):
         req = urllib.request.Request(self.server.origin+'/', method='PUT')
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
